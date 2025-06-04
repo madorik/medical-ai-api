@@ -54,7 +54,7 @@ passport.use(new GoogleStrategy({
         .from('users')
         .update({
           name: profile.displayName,
-          picture_url: profile.photos[0]?.value,
+          profile_image: profile.photos[0]?.value,
           updated_at: new Date().toISOString()
         })
         .eq('id', existingUser.id)
@@ -76,7 +76,7 @@ passport.use(new GoogleStrategy({
       provider: 'google',
       email: profile.emails[0].value,
       name: profile.displayName,
-      picture_url: profile.photos[0]?.value
+      profile_image: profile.photos[0]?.value
     };
     
     const { data: createdUser, error: insertError } = await supabase
