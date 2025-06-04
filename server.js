@@ -36,12 +36,9 @@ app.use(cors({
     ? [
         'https://medicare-ai-front.vercel.app',
         process.env.FRONTEND_URL,
-        'https://your-vercel-app.vercel.app', 
-        'https://yourdomain.com'
       ].filter(Boolean) // undefined 값 제거
     : [
         'http://localhost:3000', 
-        'http://localhost:9090',
         'https://medicare-ai-front.vercel.app',
         process.env.FRONTEND_URL
       ].filter(Boolean),
@@ -113,7 +110,8 @@ app.get('/', (req, res) => {
         '실시간 채팅 (SSE)': 'POST /chat/stream',
         '일반 채팅': 'POST /chat/message',
         '채팅 히스토리 조회': 'GET /chat/history',
-        '채팅 히스토리 삭제': 'DELETE /chat/history'
+        '채팅 히스토리 삭제': 'DELETE /chat/history',
+        '채팅 통계 조회': 'GET /chat/stats'
       }
     },
     database: {
