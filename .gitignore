@@ -1,0 +1,15 @@
+.env
+__pycache__/
+*.pyc
+.idea/
+venv/
+.vercel
+*.log
+*.pt
+*.bin
+*.model
+*.ckpt
+*.h5
+node_modules/
+app/models/__pycache__/
+/node_modules/
