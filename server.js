@@ -33,8 +33,18 @@ app.use(helmet({
 // CORS 설정 - 클라이언트 요청을 허용
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
-    ? ['https://your-vercel-app.vercel.app', 'https://yourdomain.com']
-    : ['http://localhost:3000', 'http://localhost:9090'],
+    ? [
+        'https://medicare-ai-front.vercel.app',
+        process.env.FRONTEND_URL,
+        'https://your-vercel-app.vercel.app', 
+        'https://yourdomain.com'
+      ].filter(Boolean) // undefined 값 제거
+    : [
+        'http://localhost:3000', 
+        'http://localhost:9090',
+        'https://medicare-ai-front.vercel.app',
+        process.env.FRONTEND_URL
+      ].filter(Boolean),
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
