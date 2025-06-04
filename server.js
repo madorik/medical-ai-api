@@ -32,7 +32,7 @@ app.use(helmet({
 // CORS 설정 - 클라이언트 요청을 허용
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
-    ? ['https://yourdomain.com', 'http://localhost:9090']
+    ? ['https://your-vercel-app.vercel.app', 'https://yourdomain.com']
     : ['http://localhost:3000', 'http://localhost:9090'],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -98,7 +98,6 @@ app.get('/', (req, res) => {
         '지원 파일 형식 조회': 'GET /api/medical/supported-formats'
       },
     },
-
     database: {
       type: 'Supabase PostgreSQL',
       features: ['Row Level Security', 'Real-time subscriptions', 'Auto-generated APIs']
@@ -177,52 +176,54 @@ function validateEnvironment() {
   return true;
 }
 
-// 서버 시작
-async function startServer() {
-  try {
-    // 환경변수 검증
-    const envValid = validateEnvironment();
-    
-    // Supabase 연결 테스트
-    if (process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY) {
-      console.log('🔌 Supabase 연결을 확인하는 중...');
-      await testConnection();
-    } else {
-      console.warn('⚠️  Supabase 환경변수가 설정되지 않았습니다.');
-    }
-    
-    // 서버 시작
-    app.listen(PORT, () => {
-      console.log(`🚀 서버가 포트 ${PORT}에서 실행 중입니다.`);
-      console.log(`📝 API 문서: http://localhost:${PORT}`);
-      console.log(`🔐 Google OAuth: http://localhost:${PORT}/auth/google`);
-      console.log(`💾 데이터베이스: Supabase PostgreSQL`);
-      console.log(`🤖 AI 모델: OpenAI gpt-4o-mini`);
-      console.log(`👥 소셜 로그인: Google (확장 가능)`);
+// 서버 시작 (개발 환경에서만)
+if (process.env.NODE_ENV !== 'production') {
+  async function startServer() {
+    try {
+      // 환경변수 검증
+      const envValid = validateEnvironment();
       
-      if (!envValid) {
-        console.log('⚡ 개발 모드로 실행 중 (일부 기능 제한됨)');
+      // Supabase 연결 테스트
+      if (process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY) {
+        console.log('🔌 Supabase 연결을 확인하는 중...');
+        await testConnection();
+      } else {
+        console.warn('⚠️  Supabase 환경변수가 설정되지 않았습니다.');
       }
-    });
-    
-  } catch (error) {
-    console.error('❌ 서버 시작 중 오류가 발생했습니다:', error);
-    process.exit(1);
+      
+      // 서버 시작
+      app.listen(PORT, () => {
+        console.log(`🚀 서버가 포트 ${PORT}에서 실행 중입니다.`);
+        console.log(`📝 API 문서: http://localhost:${PORT}`);
+        console.log(`🔐 Google OAuth: http://localhost:${PORT}/auth/google`);
+        console.log(`💾 데이터베이스: Supabase PostgreSQL`);
+        console.log(`🤖 AI 모델: OpenAI gpt-4o-mini`);
+        console.log(`👥 소셜 로그인: Google (확장 가능)`);
+        
+        if (!envValid) {
+          console.log('⚡ 개발 모드로 실행 중 (일부 기능 제한됨)');
+        }
+      });
+      
+    } catch (error) {
+      console.error('❌ 서버 시작 중 오류가 발생했습니다:', error);
+      process.exit(1);
+    }
   }
+
+  // 서버 시작
+  startServer();
+
+  // Graceful shutdown
+  process.on('SIGTERM', () => {
+    console.log('📴 서버를 종료합니다...');
+    process.exit(0);
+  });
+
+  process.on('SIGINT', () => {
+    console.log('📴 서버를 종료합니다...');
+    process.exit(0);
+  });
 }
-
-// 서버 시작
-startServer();
-
-// Graceful shutdown
-process.on('SIGTERM', () => {
-  console.log('📴 서버를 종료합니다...');
-  process.exit(0);
-});
-
-process.on('SIGINT', () => {
-  console.log('📴 서버를 종료합니다...');
-  process.exit(0);
-});
 
 module.exports = app; 

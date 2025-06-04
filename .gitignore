@@ -14,3 +14,10 @@ node_modules/
 app/models/__pycache__/
 /node_modules/
 /.cursor/rules/medicare.mdc
+
+# Vercel
+.vercel
+
+# Environment variables
+.env.local
+.env.production

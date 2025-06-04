@@ -9,7 +9,9 @@
   "scripts": {
     "start": "node server.js",
     "build": "echo 'Build completed'",
-    "dev": "nodemon server.js"
+    "dev": "nodemon server.js",
+    "vercel-build": "echo 'Vercel build completed'",
+    "deploy": "vercel --prod"
   },
   "keywords": ["express", "oauth", "openai", "api", "medical", "healthcare"],
   "author": "Medical Care API Team",
