@@ -32,15 +32,15 @@ passport.deserializeUser(async (id, done) => {
 passport.use(new GoogleStrategy({
   clientID: process.env.GOOGLE_CLIENT_ID || 'demo-client-id',
   clientSecret: process.env.GOOGLE_CLIENT_SECRET || 'demo-client-secret',
-  callbackURL: process.env.GOOGLE_CALLBACK_URL || 'http://localhost:3000/auth/google/callback'
+  callbackURL: process.env.GOOGLE_CALLBACK_URL || 'http://localhost:9001/auth/google/callback'
 }, async (accessToken, refreshToken, profile, done) => {
   try {
-    // 기존 사용자 찾기 (소셜 ID와 제공자로 검색)
+    // 기존 사용자 찾기 (제공자 ID와 제공자로 검색)
     const { data: existingUser, error: selectError } = await supabase
       .from('users')
       .select('*')
-      .eq('social_id', profile.id)
-      .eq('social_provider', 'google')
+      .eq('provider_id', profile.id)
+      .eq('provider', 'google')
       .single();
     
     if (selectError && selectError.code !== 'PGRST116') {
@@ -54,9 +54,7 @@ passport.use(new GoogleStrategy({
         .from('users')
         .update({
           name: profile.displayName,
-          first_name: profile.name.givenName,
-          last_name: profile.name.familyName,
-          profile_image: profile.photos[0]?.value,
+          picture_url: profile.photos[0]?.value,
           updated_at: new Date().toISOString()
         })
         .eq('id', existingUser.id)
@@ -74,13 +72,11 @@ passport.use(new GoogleStrategy({
     
     // 새 사용자 생성
     const newUser = {
-      social_id: profile.id,
-      social_provider: 'google',
+      provider_id: profile.id,
+      provider: 'google',
       email: profile.emails[0].value,
       name: profile.displayName,
-      first_name: profile.name.givenName,
-      last_name: profile.name.familyName,
-      profile_image: profile.photos[0]?.value
+      picture_url: profile.photos[0]?.value
     };
     
     const { data: createdUser, error: insertError } = await supabase
@@ -156,8 +152,8 @@ async function getUserBySocialId(socialId, provider = 'google') {
     const { data: user, error } = await supabase
       .from('users')
       .select('*')
-      .eq('social_id', socialId)
-      .eq('social_provider', provider)
+      .eq('provider_id', socialId)
+      .eq('provider', provider)
       .single();
     
     if (error && error.code !== 'PGRST116') {
@@ -202,12 +198,12 @@ async function getUserStatsByProvider() {
   try {
     const { data: stats, error } = await supabase
       .from('users')
-      .select('social_provider')
+      .select('provider')
       .then(result => {
         if (result.error) throw result.error;
         
         const providerCounts = result.data.reduce((acc, user) => {
-          acc[user.social_provider] = (acc[user.social_provider] || 0) + 1;
+          acc[user.provider] = (acc[user.provider] || 0) + 1;
           return acc;
         }, {});
         

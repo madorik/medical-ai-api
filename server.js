@@ -13,9 +13,10 @@ const { testConnection } = require('./config/supabase-config');
 // 라우터 import
 const authRoutes = require('./routes/auth-routes');
 const aiRoutes = require('./routes/ai-routes');
+const chatRoutes = require('./routes/chat-routes');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 9001;
 
 // 보안 미들웨어 설정
 app.use(helmet({
@@ -79,6 +80,7 @@ app.use(passport.session());
 // 라우터 연결
 app.use('/auth', authRoutes);
 app.use('/api', aiRoutes);
+app.use('/chat', chatRoutes);
 
 // 기본 루트 엔드포인트
 app.get('/', (req, res) => {
@@ -97,6 +99,12 @@ app.get('/', (req, res) => {
         '진료 기록 분석 (SSE)': 'POST /api/medical/analyze',
         '지원 파일 형식 조회': 'GET /api/medical/supported-formats'
       },
+      chat: {
+        '실시간 채팅 (SSE)': 'POST /chat/stream',
+        '일반 채팅': 'POST /chat/message',
+        '채팅 히스토리 조회': 'GET /chat/history',
+        '채팅 히스토리 삭제': 'DELETE /chat/history'
+      }
     },
     database: {
       type: 'Supabase PostgreSQL',
@@ -109,7 +117,8 @@ app.get('/', (req, res) => {
     environment: process.env.NODE_ENV || 'development',
     models: ['gpt-4o-mini'],
     demo: {
-      medicalAnalysis: '/public/medical-analysis-demo.html'
+      medicalAnalysis: '/public/medical-analysis-demo.html',
+      medicalChat: '/public/medical-chat-demo.html'
     }
   });
 });
@@ -122,6 +131,7 @@ app.use('*', (req, res) => {
     availableEndpoints: {
       auth: '/auth/*',
       ai: '/api/*',
+      chat: '/chat/*',
       documentation: '/'
     }
   });
@@ -196,6 +206,7 @@ if (process.env.NODE_ENV !== 'production') {
         console.log(`🚀 서버가 포트 ${PORT}에서 실행 중입니다.`);
         console.log(`📝 API 문서: http://localhost:${PORT}`);
         console.log(`🔐 Google OAuth: http://localhost:${PORT}/auth/google`);
+        console.log(`💬 의료 상담 채팅: http://localhost:${PORT}/public/medical-chat-demo.html`);
         console.log(`💾 데이터베이스: Supabase PostgreSQL`);
         console.log(`🤖 AI 모델: OpenAI gpt-4o-mini`);
         console.log(`👥 소셜 로그인: Google (확장 가능)`);
@@ -226,4 +237,4 @@ if (process.env.NODE_ENV !== 'production') {
   });
 }
 
-module.exports = app; 
+module.exports = app;

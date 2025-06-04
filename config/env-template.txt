@@ -27,7 +27,7 @@ JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
 SESSION_SECRET=your-session-secret-key-change-this-in-production
 
 # 프론트엔드 URL (CORS 설정용)
-FRONTEND_URL=http://localhost:9090
+FRONTEND_URL=http://localhost:3000
 
 # ================================================================
 # 🛠️ 설정 가이드

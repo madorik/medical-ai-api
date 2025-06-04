@@ -1,6 +1,6 @@
 # 🏥 Medical AI API
 
-OpenAI와 Google OAuth를 활용한 의료 진료 기록 분석 API
+OpenAI와 Google OAuth를 활용한 의료 진료 기록 분석 및 상담 채팅 API
 
 ## 🌟 주요 기능
 
@@ -15,6 +15,12 @@ OpenAI와 Google OAuth를 활용한 의료 진료 기록 분석 API
 - **실시간 스트리밍 분석**: SSE(Server-Sent Events)를 통한 실시간 분석 결과 전송
 - **구조화된 JSON 응답**: 환자 정보, 진단명, 처방전, 검사 결과 등을 체계적으로 분석
 
+### 💬 AI 의료 상담 채팅
+- **실시간 채팅**: 사용자와 의료 AI 간 실시간 대화
+- **스트리밍 응답**: SSE를 통한 AI 응답 실시간 스트리밍
+- **채팅 히스토리**: 대화 내용 자동 저장 및 조회
+- **의료 전문 프롬프트**: 의료 상담에 특화된 AI 어시스턴트
+
 ## 🚀 API 엔드포인트
 
 ### 인증 관련
@@ -28,8 +34,15 @@ OpenAI와 Google OAuth를 활용한 의료 진료 기록 분석 API
 - `POST /api/medical/analyze` - 진료 기록 업로드 및 분석 (SSE)
 - `GET /api/medical/supported-formats` - 지원 파일 형식 조회
 
+### 의료 상담 채팅
+- `POST /chat/stream` - 실시간 채팅 (SSE 스트리밍)
+- `POST /chat/message` - 일반 채팅 (단일 응답)
+- `GET /chat/history` - 채팅 히스토리 조회
+- `DELETE /chat/history` - 채팅 히스토리 삭제
+
 ### 데모 페이지
 - `/public/medical-analysis-demo.html` - 진료 기록 분석 테스트 페이지
+- `/public/medical-chat-demo.html` - 의료 상담 채팅 데모 페이지
 
 ## 📊 분석 결과 형식
 

@@ -28,7 +28,7 @@ router.get('/google/callback',
     try {
       // JWT 토큰 생성
       const token = generateToken(req.user);
-      const frontUrl = process.env.FRONTEND_URL || 'http://localhost:9090';
+      const frontUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
       const redirectUrl = `${frontUrl}/auth/success?token=${token}`;
 
       res.redirect(redirectUrl);
