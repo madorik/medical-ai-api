@@ -108,6 +108,32 @@ npm run dev
 npm start
 ```
 
+## 🌐 Vercel 배포
+
+### 배포 명령어
+```bash
+# Vercel CLI 설치
+npm install -g vercel
+
+# Vercel 로그인
+vercel login
+
+# 프로덕션 배포
+vercel --prod
+```
+
+### 환경변수 설정
+Vercel 대시보드에서 다음 환경변수들을 설정하세요:
+- `OPENAI_API_KEY`
+- `GOOGLE_CLIENT_ID` 
+- `GOOGLE_CLIENT_SECRET`
+- `SUPABASE_URL`
+- `SUPABASE_ANON_KEY`
+- `SESSION_SECRET`
+- `NODE_ENV=production`
+
+자세한 배포 가이드는 `deploy-guide.md` 파일을 참고하세요.
+
 ## 📱 사용 방법
 
 ### 1. 웹 데모 사용
