@@ -23,7 +23,7 @@ app.use(helmet({
     directives: {
       defaultSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'"],
-      scriptSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
       imgSrc: ["'self'", "data:", "https:"],
     },
   },
@@ -69,6 +69,9 @@ app.use(session({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// 정적 파일 서빙
+app.use('/public', express.static('public'));
+
 // Passport 초기화
 app.use(passport.initialize());
 app.use(passport.session());
@@ -91,7 +94,8 @@ app.get('/', (req, res) => {
         '로그아웃': 'POST /auth/logout',
       },
       ai: {
-
+        '진료 기록 분석 (SSE)': 'POST /api/medical/analyze',
+        '지원 파일 형식 조회': 'GET /api/medical/supported-formats'
       },
     },
 
@@ -104,7 +108,10 @@ app.get('/', (req, res) => {
       expandable: 'Facebook, Kakao, Naver 등 추가 가능'
     },
     environment: process.env.NODE_ENV || 'development',
-    models: ['gpt-4o-mini']
+    models: ['gpt-4o-mini'],
+    demo: {
+      medicalAnalysis: '/public/medical-analysis-demo.html'
+    }
   });
 });
 

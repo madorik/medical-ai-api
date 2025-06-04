@@ -13,3 +13,4 @@ venv/
 node_modules/
 app/models/__pycache__/
 /node_modules/
+/.cursor/rules/medicare.mdc
