@@ -185,7 +185,7 @@ router.post('/stream', verifyToken, async (req, res) => {
         messages: validMessages,
         stream: true,
         temperature: 0.7,
-        max_tokens: 1500,
+        max_tokens: 3000,
         presence_penalty: 0.1,
         frequency_penalty: 0.1
       });
@@ -278,7 +278,7 @@ router.post('/message', verifyToken, async (req, res) => {
       model: 'gpt-4o-mini',
       messages: validMessages,
       temperature: 0.7,
-      max_tokens: 1500,
+      max_tokens: 3000,
       presence_penalty: 0.1,
       frequency_penalty: 0.1
     });

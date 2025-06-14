@@ -3,6 +3,7 @@ const { askChatGPT, chatWithHistory, validateApiKey } = require('../services/ope
 const { optionalAuth, authenticateToken } = require('../utils/jwt-utils');
 const { upload, validateFile, formatUploadError } = require('../utils/file-upload-utils');
 const { checkIfMedicalRecord, analyzeMedicalRecord } = require('../services/medical-analysis-service');
+const { formatTextToHtml, formatMedicalAnalysis } = require('../utils/text-formatter');
 
 const router = express.Router();
 
@@ -60,7 +61,7 @@ router.post('/medical/analyze', upload.single('medicalFile'), async (req, res) =
     
     let accumulatedContent = '';
     let tokenCount = 0;
-    const MAX_TOKENS = 200;
+    const MAX_TOKENS = 4000;
     
     for await (const chunk of stream) {
       const content = chunk.choices[0]?.delta?.content || '';
@@ -74,16 +75,14 @@ router.post('/medical/analyze', upload.single('medicalFile'), async (req, res) =
         // 실시간으로 부분 응답 전송
         res.write(`data: ${JSON.stringify({
           type: 'chunk',
-          content: content,
-          accumulated: accumulatedContent,
-          tokenCount: tokenCount
+          content: content
         })}\n\n`);
         
-        // 200 토큰 도달 시 중단
+        // 토큰 제한 체크를 더 관대하게 변경
         if (tokenCount >= MAX_TOKENS) {
           res.write(`data: ${JSON.stringify({
-            type: 'warning',
-            message: `테스트 모드: ${MAX_TOKENS}개 토큰 도달로 분석을 중단합니다.`
+            type: 'info',
+            message: `상세 분석이 ${MAX_TOKENS}개 토큰에 도달했습니다. 분석을 완료합니다.`
           })}\n\n`);
           break;
         }
@@ -92,16 +91,29 @@ router.post('/medical/analyze', upload.single('medicalFile'), async (req, res) =
 
     // JSON 파싱 시도
     try {
-      // 텍스트 형식이므로 JSON 파싱 없이 바로 전송
+      // JSON 형태로 응답이 올 것으로 예상되므로 파싱 시도
+      let parsedResult;
+      try {
+        parsedResult = JSON.parse(accumulatedContent);
+      } catch (jsonError) {
+        // JSON 파싱 실패 시 원본 텍스트로 처리
+        console.log('JSON 파싱 실패, 원본 텍스트로 처리:', jsonError.message);
+        parsedResult = null;
+      }
+      
+      const formattedResult = formatMedicalAnalysis(accumulatedContent);
+      
       res.write(`data: ${JSON.stringify({
         type: 'complete',
         result: {
-          analysis: accumulatedContent,
+          analysis: accumulatedContent,               // 원본 텍스트 (JSON 문자열)
+          analysisHtml: formattedResult.html,         // HTML 포맷팅된 텍스트
+          parsedData: parsedResult,                   // 파싱된 JSON 객체 (성공 시)
           tokenCount: tokenCount,
-          format: 'text'
+          format: parsedResult ? 'json' : 'html'
         },
         message: tokenCount >= MAX_TOKENS 
-          ? `테스트 모드: ${MAX_TOKENS}개 토큰으로 제한된 분석이 완료되었습니다.`
+          ? `상세 분석이 완료되었습니다. (${MAX_TOKENS}개 토큰)`
           : '진료 기록 분석이 완료되었습니다.'
       })}\n\n`);
       
@@ -112,6 +124,8 @@ router.post('/medical/analyze', upload.single('medicalFile'), async (req, res) =
         type: 'complete',
         result: {
           analysis: accumulatedContent,
+          analysisHtml: formatTextToHtml(accumulatedContent),
+          parsedData: null,
           tokenCount: tokenCount,
           error: '분석 결과 처리 중 오류가 발생했습니다.'
         },
