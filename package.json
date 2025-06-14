@@ -13,26 +13,34 @@
     "vercel-build": "echo 'Vercel build completed'",
     "deploy": "vercel --prod"
   },
-  "keywords": ["express", "oauth", "openai", "api", "medical", "healthcare"],
+  "keywords": [
+    "express",
+    "oauth",
+    "openai",
+    "api",
+    "medical",
+    "healthcare"
+  ],
   "author": "Medical Care API Team",
   "license": "MIT",
   "dependencies": {
+    "@supabase/supabase-js": "^2.39.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
     "express": "^4.18.2",
+    "express-rate-limit": "^7.1.5",
+    "express-session": "^1.17.3",
+    "helmet": "^7.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^1.4.5-lts.1",
+    "node-fetch": "^2.7.0",
+    "nodemailer": "^7.0.3",
+    "openai": "^4.24.1",
     "passport": "^0.7.0",
     "passport-google-oauth20": "^2.0.0",
-    "express-session": "^1.17.3",
-    "dotenv": "^16.3.1",
-    "jsonwebtoken": "^9.0.2",
-    "openai": "^4.24.1",
-    "cors": "^2.8.5",
-    "helmet": "^7.1.0",
-    "express-rate-limit": "^7.1.5",
-    "node-fetch": "^2.7.0",
-    "@supabase/supabase-js": "^2.39.0",
-    "multer": "^1.4.5-lts.1",
     "pdf-parse": "^1.1.1"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"
   }
-} 
+}

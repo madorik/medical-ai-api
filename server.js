@@ -14,6 +14,7 @@ const { testConnection } = require('./config/supabase-config');
 const authRoutes = require('./routes/auth-routes');
 const aiRoutes = require('./routes/ai-routes');
 const chatRoutes = require('./routes/chat-routes');
+const emailRoutes = require('./routes/email-routes');
 
 const app = express();
 const PORT = process.env.PORT || 9001;
@@ -88,6 +89,7 @@ app.use(passport.session());
 app.use('/auth', authRoutes);
 app.use('/api', aiRoutes);
 app.use('/chat', chatRoutes);
+app.use('/api/email', emailRoutes);
 
 // 기본 루트 엔드포인트
 app.get('/', (req, res) => {
@@ -105,6 +107,11 @@ app.get('/', (req, res) => {
       ai: {
         '진료 기록 분석 (SSE)': 'POST /api/medical/analyze',
         '지원 파일 형식 조회': 'GET /api/medical/supported-formats'
+      },
+      email: {
+        '이메일 전송': 'POST /api/email/send',
+        '이메일 서비스 상태': 'GET /api/email/status',
+        'API 문서 정보': 'GET /api/email/info'
       },
       chat: {
         '실시간 채팅 (SSE)': 'POST /chat/stream',
@@ -181,16 +188,27 @@ function validateEnvironment() {
     'SUPABASE_URL',
     'SUPABASE_ANON_KEY'
   ];
+
+  const optionalEnvVars = [
+    'EMAIL_USER',
+    'EMAIL_PASS'
+  ];
   
   const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
   
   if (missingVars.length > 0) {
-    console.warn('⚠️  다음 환경변수가 설정되지 않았습니다:', missingVars.join(', '));
+    console.warn('⚠️  다음 필수 환경변수가 설정되지 않았습니다:', missingVars.join(', '));
     console.warn('📝 .env 파일을 확인하고 누락된 값들을 추가해주세요.');
     return false;
   }
+
+  const missingOptionalVars = optionalEnvVars.filter(varName => !process.env[varName]);
+  if (missingOptionalVars.length > 0) {
+    console.warn('ℹ️  다음 선택적 환경변수가 설정되지 않았습니다:', missingOptionalVars.join(', '));
+    console.warn('📧 이메일 기능을 사용하려면 EMAIL_USER, EMAIL_PASS 설정이 필요합니다.');
+  }
   
-  console.log('✅ 모든 환경변수가 설정되었습니다.');
+  console.log('✅ 모든 필수 환경변수가 설정되었습니다.');
   return true;
 }
 
