@@ -41,19 +41,19 @@ router.post('/medical/analyze', upload.single('medicalFile'), async (req, res) =
     const result = await analyzeUploadedMedicalDocument(req.file.buffer, req.file.mimetype);
     
     // 카테고리 분류 결과 전송
-    const categoryName = CATEGORY_NAMES_KR[result.classification.category] || '기타';
     res.write(`data: ${JSON.stringify({
       type: 'classification',
       category: result.classification.category,
-      categoryName: categoryName,
+      categoryInfo: result.categoryInfo,
       confidence: result.classification.confidence,
-      message: `문서 카테고리: ${categoryName} (신뢰도: ${result.classification.confidence})`
+      reason: result.classification.reason,
+      message: `문서 카테고리: ${result.categoryInfo.name} (신뢰도: ${Math.round(result.classification.confidence * 100)}%)`
     })}\n\n`);
 
     // 카테고리별 맞춤 분석 시작
     res.write(`data: ${JSON.stringify({
       type: 'status',
-      message: `${categoryName} 문서를 전문적으로 분석하고 있습니다...`
+      message: `${result.categoryInfo.icon} ${result.categoryInfo.name} 문서를 전문적으로 분석하고 있습니다...`
     })}\n\n`);
 
     // 스트리밍 분석 결과 처리
@@ -90,9 +90,10 @@ router.post('/medical/analyze', upload.single('medicalFile'), async (req, res) =
     // 분석 완료 알림
     res.write(`data: ${JSON.stringify({
       type: 'complete',
-      message: `${categoryName} 문서 분석이 완료되었습니다.`,
+      message: `${result.categoryInfo.icon} ${result.categoryInfo.name} 문서 분석이 완료되었습니다.`,
       category: result.classification.category,
-      categoryName: categoryName
+      categoryInfo: result.categoryInfo,
+      fullContent: accumulatedContent
     })}\n\n`);
 
   } catch (error) {
@@ -140,34 +141,67 @@ router.get('/medical/supported-formats', (req, res) => {
         name: 'PDF',
         mimeType: 'application/pdf',
         extensions: ['.pdf'],
-        features: ['텍스트 추출 분석', '자동 카테고리 분류', '카테고리별 맞춤 분석']
+        features: ['텍스트 추출 분석', '기본 카테고리 분류', '맞춤 분석']
       }
     ],
     supportedCategories: [
-      { code: 'medical_record', name: '진료기록' },
-      { code: 'prescription', name: '처방전' },
-      { code: 'pharmacy_receipt', name: '약국 영수증' },
-      { code: 'lab_result', name: '검사결과' },
-      { code: 'imaging_result', name: '영상검사' },
-      { code: 'health_checkup', name: '건강검진' },
-      { code: 'hospital_bill', name: '병원 영수증' },
-      { code: 'diagnosis_report', name: '진단서' },
-      { code: 'medical_certificate', name: '진료확인서' },
-      { code: 'other', name: '기타' }
+      { 
+        code: 'medical_record', 
+        name: '진료기록',
+        icon: '📋',
+        description: '의사의 진료 기록과 치료 계획'
+      },
+      { 
+        code: 'prescription', 
+        name: '처방전',
+        icon: '💊',
+        description: '처방된 약물과 복용법'
+      },
+      { 
+        code: 'pharmacy_receipt', 
+        name: '약국 영수증',
+        icon: '🧾',
+        description: '약국에서 조제한 약물과 비용'
+      },
+      { 
+        code: 'lab_result', 
+        name: '검사결과',
+        icon: '🔬',
+        description: '혈액검사 등 임상검사 결과'
+      },
+      { 
+        code: 'health_checkup', 
+        name: '건강검진',
+        icon: '🏥',
+        description: '종합건강검진 결과'
+      },
+      { 
+        code: 'hospital_bill', 
+        name: '병원 영수증',
+        icon: '💳',
+        description: '병원 진료비와 보험 적용 내역'
+      },
+      { 
+        code: 'other', 
+        name: '기타',
+        icon: '📄',
+        description: '기타 의료 관련 문서'
+      }
     ],
     maxFileSize: '5MB',
     maxFileSizeBytes: 5 * 1024 * 1024,
     description: '의료 문서를 업로드하면 AI가 자동으로 카테고리를 분류하고 맞춤형 분석을 제공합니다.',
     features: [
-      '18개 카테고리 자동 분류',
+      '6가지 카테고리 자동 분류 (이미지 파일)',
       '카테고리별 전문 AI 분석',
       '실시간 스트리밍 분석',
       'Markdown 형식 결과 제공',
-      '한국어 의료 용어 지원'
+      '한국어 의료 용어 지원',
+      '아이콘과 색상으로 카테고리 시각화'
     ],
     workflow: [
       '1. 파일 업로드 및 검증',
-      '2. 의료 문서 카테고리 자동 분류',
+      '2. 의료 문서 카테고리 자동 분류 (이미지)',
       '3. 카테고리별 맞춤형 AI 분석',
       '4. 실시간 결과 스트리밍 제공'
     ],
