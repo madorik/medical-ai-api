@@ -98,10 +98,7 @@ app.get('/', (req, res) => {
     version: '1.0.0',
     documentation: {
       authentication: {
-        'Google OAuth 로그인': 'GET /auth/google',
-        '로그인 상태 확인': 'GET /auth/status',
         '사용자 프로필': 'GET /auth/profile',
-        '토큰 검증': 'POST /auth/verify-token',
         '로그아웃': 'POST /auth/logout',
       },
       ai: {
@@ -109,16 +106,10 @@ app.get('/', (req, res) => {
         '지원 파일 형식 조회': 'GET /api/medical/supported-formats'
       },
       email: {
-        '이메일 전송': 'POST /api/email/send',
-        '이메일 서비스 상태': 'GET /api/email/status',
-        'API 문서 정보': 'GET /api/email/info'
+        '이메일 전송': 'POST /api/email/send'
       },
       chat: {
-        '실시간 채팅 (SSE)': 'POST /chat/stream',
-        '일반 채팅': 'POST /chat/message',
-        '채팅 히스토리 조회': 'GET /chat/history',
-        '채팅 히스토리 삭제': 'DELETE /chat/history',
-        '채팅 통계 조회': 'GET /chat/stats'
+        '실시간 채팅 (SSE)': 'POST /chat/stream'
       }
     },
     database: {
@@ -130,11 +121,7 @@ app.get('/', (req, res) => {
       expandable: 'Facebook, Kakao, Naver 등 추가 가능'
     },
     environment: process.env.NODE_ENV || 'development',
-    models: ['gpt-4o-mini'],
-    demo: {
-      medicalAnalysis: '/public/medical-analysis-demo.html',
-      medicalChat: '/public/medical-chat-demo.html'
-    }
+    models: ['gpt-4o-mini']
   });
 });
 
@@ -144,9 +131,10 @@ app.use('*', (req, res) => {
     error: '요청하신 엔드포인트를 찾을 수 없습니다.',
     message: `${req.method} ${req.originalUrl}는 지원되지 않는 경로입니다.`,
     availableEndpoints: {
-      auth: '/auth/*',
-      ai: '/api/*',
-      chat: '/chat/*',
+      auth: '/auth/profile, /auth/logout',
+      ai: '/api/medical/analyze, /api/medical/supported-formats',
+      chat: '/chat/stream',
+      email: '/api/email/send',
       documentation: '/'
     }
   });
