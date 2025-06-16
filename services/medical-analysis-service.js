@@ -246,7 +246,7 @@ ${NOTION_MARKDOWN_STYLE}
 /**
  * 이미지에서 의료 문서 카테고리 분류
  */
-async function classifyMedicalDocumentFromImage(fileBuffer, mimeType) {
+async function classifyMedicalDocumentFromImage(fileBuffer, mimeType, model = '4o-mini') {
   try {
     if (!mimeType.startsWith('image/')) {
       throw new Error('이미지 파일만 분류할 수 있습니다.');
@@ -255,7 +255,7 @@ async function classifyMedicalDocumentFromImage(fileBuffer, mimeType) {
     const base64Image = fileBuffer.toString('base64');
     
     const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: model.startsWith('gpt-') ? model : `gpt-${model}`,
       messages: [
         {
           role: "system", 
@@ -328,7 +328,7 @@ async function classifyMedicalDocumentFromImage(fileBuffer, mimeType) {
 /**
  * 카테고리별 맞춤형 의료 문서 분석
  */
-async function analyzeMedicalRecordByCategory(fileBuffer, mimeType, category) {
+async function analyzeMedicalRecordByCategory(fileBuffer, mimeType, category, model = '4o-mini') {
   try {
     // 카테고리별 시스템 프롬프트 선택
     const systemPrompt = CATEGORY_PROMPTS[category] || DEFAULT_MEDICAL_PROMPT;
@@ -345,7 +345,7 @@ async function analyzeMedicalRecordByCategory(fileBuffer, mimeType, category) {
     if (mimeType.startsWith('image/')) {
       const base64Image = fileBuffer.toString('base64');
       return openai.chat.completions.create({
-        model: "gpt-4o-mini",
+        model: model.startsWith('gpt-') ? model : `gpt-${model}`,
         messages: [
           {
             role: "system",
@@ -374,7 +374,7 @@ async function analyzeMedicalRecordByCategory(fileBuffer, mimeType, category) {
     } else {
       // 텍스트 기반 분석
       return openai.chat.completions.create({
-        model: "gpt-4o-mini",
+        model: model.startsWith('gpt-') ? model : `gpt-${model}`,
         messages: [
           {
             role: "system",
@@ -399,13 +399,13 @@ async function analyzeMedicalRecordByCategory(fileBuffer, mimeType, category) {
 /**
  * 통합 분석 함수 - 카테고리 분류 후 분석
  */
-async function analyzeUploadedMedicalDocument(fileBuffer, mimeType) {
+async function analyzeUploadedMedicalDocument(fileBuffer, mimeType, model = '4o-mini') {
   try {
     let classificationResult;
 
     // 이미지 파일인 경우 Vision API로 분류
     if (mimeType.startsWith('image/')) {
-      classificationResult = await classifyMedicalDocumentFromImage(fileBuffer, mimeType);
+      classificationResult = await classifyMedicalDocumentFromImage(fileBuffer, mimeType, model);
     } else {
       // PDF 등 기타 파일의 경우 기본 분류
       classificationResult = {
@@ -419,7 +419,8 @@ async function analyzeUploadedMedicalDocument(fileBuffer, mimeType) {
     const analysisStream = await analyzeMedicalRecordByCategory(
       fileBuffer, 
       mimeType, 
-      classificationResult.category
+      classificationResult.category,
+      model
     );
     
     return {

@@ -35,11 +35,11 @@ const MEDICAL_SYSTEM_PROMPT = `
 2. 대화 스타일 가이드
 ──────────────────────
 • 말투는 **편안한 존댓말**을 사용하세요.  
-  (예: “요즘 많이 피곤하시진 않으세요?”, “혹시 이런 증상은 언제부터 있었을까요?”)  
+  (예: "요즘 많이 피곤하시진 않으세요?", "혹시 이런 증상은 언제부터 있었을까요?")  
 • 처음에는 **공감이나 경청으로 시작**하고, 무조건 조언부터 하지 마세요.  
 • 정보는 대화 안에 자연스럽게 녹여서 설명하세요.  
 • 사용자가 말한 증상에 대해 **하나씩 질문하며 파악**하고, 필요한 경우 **추가로 확인할 점**을 제안하세요.  
-• “~일 수도 있어요” / “정확한 판단은 진료를 받아보셔야 해요” 같은 **의학적 안전선**을 꼭 포함하세요.
+• "~일 수도 있어요" / "정확한 판단은 진료를 받아보셔야 해요" 같은 **의학적 안전선**을 꼭 포함하세요.
 
 ──────────────────────
 3. 응답 흐름 예시
@@ -133,7 +133,8 @@ function detectEmergency(message) {
 router.post('/stream', verifyToken, async (req, res) => {
   try {
     const { message, chatHistory = [] } = req.body;
-    
+    const requestedModel = req.body.model || req.query.model;
+    console.log('requestedModel', requestedModel);
     // 메시지 검증
     const validation = validateMessage(message);
     if (!validation.isValid) {
@@ -144,6 +145,12 @@ router.post('/stream', verifyToken, async (req, res) => {
     }
     
     const cleanMessage = validation.message;
+    
+    // 모델 설정 (기본값 4o-mini)
+    let modelName = requestedModel || '4o-mini';
+    if (!modelName.startsWith('gpt-')) {
+      modelName = `gpt-${modelName}`;
+    }
     
     // SSE 헤더 설정
     res.writeHead(200, {
@@ -181,7 +188,7 @@ router.post('/stream', verifyToken, async (req, res) => {
     try {
       // OpenAI 스트리밍 요청
       const stream = await openai.chat.completions.create({
-        model: 'gpt-4o-mini',
+        model: modelName,
         messages: validMessages,
         stream: true,
         temperature: 0.7,

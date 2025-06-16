@@ -31,6 +31,12 @@ router.post('/medical/analyze', upload.single('medicalFile'), async (req, res) =
 
     validateFile(req.file);
 
+    // 모델 파라미터 처리 (기본값 4o-mini)
+    let modelName = (req.body.model || req.query.model) || '4o-mini';
+    if (!modelName.startsWith('gpt-')) {
+      modelName = `gpt-${modelName}`;
+    }
+
     // 분석 시작 알림
     res.write(`data: ${JSON.stringify({
       type: 'status',
@@ -38,7 +44,7 @@ router.post('/medical/analyze', upload.single('medicalFile'), async (req, res) =
     })}\n\n`);
 
     // 카테고리 분류 및 통합 분석
-    const result = await analyzeUploadedMedicalDocument(req.file.buffer, req.file.mimetype);
+    const result = await analyzeUploadedMedicalDocument(req.file.buffer, req.file.mimetype, modelName);
     
     // 카테고리 분류 결과 전송
     res.write(`data: ${JSON.stringify({
