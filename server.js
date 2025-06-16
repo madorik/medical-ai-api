@@ -94,34 +94,17 @@ app.use('/api/email', emailRoutes);
 // 기본 루트 엔드포인트
 app.get('/', (req, res) => {
   res.json({
-    message: '🚀 AI Learning API에 오신 것을 환영합니다!',
-    version: '1.0.0',
-    documentation: {
-      authentication: {
-        '사용자 프로필': 'GET /auth/profile',
-        '로그아웃': 'POST /auth/logout',
-      },
-      ai: {
-        '진료 기록 분석 (SSE)': 'POST /api/medical/analyze',
-        '지원 파일 형식 조회': 'GET /api/medical/supported-formats'
-      },
-      email: {
-        '이메일 전송': 'POST /api/email/send'
-      },
-      chat: {
-        '실시간 채팅 (SSE)': 'POST /chat/stream'
-      }
+    message: '의료 AI API 서버가 정상적으로 실행중입니다.',
+    status: 'running',
+    timestamp: new Date().toISOString(),
+    availableEndpoints: {
+      auth: '/auth/google, /auth/google/callback, /auth/status, /auth/profile, /auth/logout',
+      ai: '/api/medical/analyze, /api/medical/supported-formats',
+      chat: '/chat/stream',
+      email: '/api/email/send',
+      documentation: '/'
     },
-    database: {
-      type: 'Supabase PostgreSQL',
-      features: ['Row Level Security', 'Real-time subscriptions', 'Auto-generated APIs']
-    },
-    authentication: {
-      providers: ['Google OAuth 2.0'],
-      expandable: 'Facebook, Kakao, Naver 등 추가 가능'
-    },
-    environment: process.env.NODE_ENV || 'development',
-    models: ['gpt-4o-mini']
+    description: '의료 문서 분석 및 AI 상담 서비스'
   });
 });
 
