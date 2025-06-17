@@ -28,8 +28,8 @@ async function buildPersonalizedSystemPrompt(userId, basePrompt) {
       const model = analysis.model || 'AI';
       return `${index + 1}. [${analysisDate}] ${model} 분석: ${analysis.summary}`;
     }).join('\n');
-    
-    const personalizedPrompt = basePrompt + `
+
+    return basePrompt + `
 다음은 이 사용자의 최근 의료 문서 분석 결과입니다. 이 정보를 참고하여 더 개인화된 의료 상담을 제공해주세요:
 ${medicalContext}
 
@@ -41,8 +41,6 @@ ${medicalContext}
 - 분석된 날짜를 고려하여 최근 정보를 우선적으로 참고하세요
 - 사용자가 이전 분석과 관련된 질문을 하지 않더라도, 관련성이 있다면 자연스럽게 언급해주세요
 `;
-    
-    return personalizedPrompt;
     
   } catch (error) {
     console.error('의료 분석 결과 조회 중 오류:', error);
@@ -170,10 +168,6 @@ router.post('/stream', verifyToken, async (req, res) => {
     const { message, chatHistory = [] } = req.body;
     const requestedModel = req.body.model || req.query.model;
     const userId = req.user.id; // JWT 토큰에서 사용자 ID 추출
-    
-    console.log('requestedModel', requestedModel);
-    console.log('사용자 ID:', userId);
-    
     // 메시지 검증
     const validation = validateMessage(message);
     if (!validation.isValid) {

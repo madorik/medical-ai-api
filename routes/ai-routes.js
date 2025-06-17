@@ -3,7 +3,6 @@ const { upload, validateFile, formatUploadError } = require('../utils/file-uploa
 const { analyzeUploadedMedicalDocumentWithSummary } = require('../services/medical-analysis-service');
 const { saveAnalysisResult, getAnalysisResultsByUser } = require('../config/supabase-config');
 const { verifyToken } = require('../utils/auth-utils');
-const { CATEGORY_NAMES_KR } = require('../utils/medical-document-categories');
 
 const router = express.Router();
 
@@ -55,26 +54,16 @@ router.post('/medical/analyze', verifyToken, upload.single('medicalFile'), async
     // 분석 시작 알림
     res.write(`data: ${JSON.stringify({
       type: 'status',
-      message: '파일 업로드 완료. 문서 카테고리를 분류하고 있습니다...'
+      message: '파일 업로드 완료. 의료 문서를 상세히 분석하고 있습니다...'
     })}\n\n`);
 
-    // 카테고리 분류 및 통합 분석 (요약 포함)
+    // 직접 상세 분석 수행 (요약 포함)
     const result = await analyzeUploadedMedicalDocumentWithSummary(req.file.buffer, req.file.mimetype, modelName);
     
-    // 카테고리 분류 결과 전송
-    res.write(`data: ${JSON.stringify({
-      type: 'classification',
-      category: result.classification.category,
-      categoryInfo: result.categoryInfo,
-      confidence: result.classification.confidence,
-      reason: result.classification.reason,
-      message: `문서 카테고리: ${result.categoryInfo.name} (신뢰도: ${Math.round(result.classification.confidence * 100)}%)`
-    })}\n\n`);
-
-    // 카테고리별 맞춤 분석 시작
+    // 분석 시작 알림
     res.write(`data: ${JSON.stringify({
       type: 'status',
-      message: `${result.categoryInfo.icon} ${result.categoryInfo.name} 문서를 전문적으로 분석하고 있습니다...`
+      message: '📋 의료 문서 분석을 시작합니다. 문서의 종류와 내용을 자동으로 파악하여 상세히 분석합니다...'
     })}\n\n`);
 
     // 스트리밍 분석 결과 처리
@@ -150,9 +139,7 @@ router.post('/medical/analyze', verifyToken, upload.single('medicalFile'), async
     // 분석 완료 알림
     res.write(`data: ${JSON.stringify({
       type: 'complete',
-      message: `${result.categoryInfo.icon} ${result.categoryInfo.name} 문서 분석이 완료되었습니다.`,
-      category: result.classification.category,
-      categoryInfo: result.categoryInfo,
+      message: '📋 의료 문서 분석이 완료되었습니다.',
       fullContent: accumulatedContent,
       summary: summary,
       analysisId: savedAnalysis?.id || null
@@ -202,16 +189,23 @@ router.get('/medical/analysis-history', verifyToken, async (req, res) => {
     // 분석 결과 조회
     const analysisResults = await getAnalysisResultsByUser(userId, limit, offset);
 
+    // 결과 포맷팅
+    const formattedResults = analysisResults.map(result => ({
+      id: result.id,
+      model: result.model,
+      summary: result.summary,
+      created_at: result.created_at,
+      room_id: result.room_id
+    }));
+
     res.json({
       success: true,
-      data: {
-        analyses: analysisResults,
-        count: analysisResults.length,
+      data: formattedResults,
+      pagination: {
         limit: limit,
         offset: offset,
-        userId: userId
-      },
-      message: '분석 결과를 성공적으로 조회했습니다.'
+        total: analysisResults.length
+      }
     });
 
   } catch (error) {
@@ -224,101 +218,46 @@ router.get('/medical/analysis-history', verifyToken, async (req, res) => {
   }
 });
 
-/**
- * 진료 기록 분석 지원 파일 형식 조회
- * GET /api/medical/supported-formats
- */
-router.get('/medical/supported-formats', (req, res) => {
-  res.json({
-    supportedFormats: [
-      {
-        name: 'JPG',
-        mimeType: 'image/jpeg',
-        extensions: ['.jpg', '.jpeg'],
-        features: ['자동 카테고리 분류', '이미지 직접 분석', '카테고리별 맞춤 분석']
-      },
-      {
-        name: 'PNG', 
-        mimeType: 'image/png',
-        extensions: ['.png'],
-        features: ['자동 카테고리 분류', '이미지 직접 분석', '카테고리별 맞춤 분석']
-      },
-      {
-        name: 'PDF',
-        mimeType: 'application/pdf',
-        extensions: ['.pdf'],
-        features: ['텍스트 추출 분석', '기본 카테고리 분류', '맞춤 분석']
-      }
-    ],
-    supportedCategories: [
-      { 
-        code: 'medical_record', 
-        name: '진료기록',
-        icon: '📋',
-        description: '의사의 진료 기록과 치료 계획'
-      },
-      { 
-        code: 'prescription', 
-        name: '처방전',
-        icon: '💊',
-        description: '처방된 약물과 복용법'
-      },
-      { 
-        code: 'pharmacy_receipt', 
-        name: '약국 영수증',
-        icon: '🧾',
-        description: '약국에서 조제한 약물과 비용'
-      },
-      { 
-        code: 'lab_result', 
-        name: '검사결과',
-        icon: '🔬',
-        description: '혈액검사 등 임상검사 결과'
-      },
-      { 
-        code: 'health_checkup', 
-        name: '건강검진',
-        icon: '🏥',
-        description: '종합건강검진 결과'
-      },
-      { 
-        code: 'hospital_bill', 
-        name: '병원 영수증',
-        icon: '💳',
-        description: '병원 진료비와 보험 적용 내역'
-      },
-      { 
-        code: 'other', 
-        name: '기타',
-        icon: '📄',
-        description: '기타 의료 관련 문서'
-      }
-    ],
-    maxFileSize: '5MB',
-    maxFileSizeBytes: 5 * 1024 * 1024,
-    description: '의료 문서를 업로드하면 AI가 자동으로 카테고리를 분류하고 맞춤형 분석을 제공합니다.',
-    features: [
-      '6가지 카테고리 자동 분류 (이미지 파일)',
-      '카테고리별 전문 AI 분석',
-      '실시간 스트리밍 분석',
-      'Markdown 형식 결과 제공',
-      '한국어 의료 용어 지원',
-      '아이콘과 색상으로 카테고리 시각화'
-    ],
-    workflow: [
-      '1. 파일 업로드 및 검증',
-      '2. 의료 문서 카테고리 자동 분류 (이미지)',
-      '3. 카테고리별 맞춤형 AI 분석',
-      '4. 실시간 결과 스트리밍 제공'
-    ],
-    usage: {
-      endpoint: '/api/medical/analyze',
-      method: 'POST',
-      contentType: 'multipart/form-data',
-      fieldName: 'medicalFile',
-      responseType: 'text/event-stream (SSE)'
+// 카테고리별 분석 결과 통계 (선택적 기능)
+router.get('/medical/analysis-stats', verifyToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        message: '유효한 사용자 인증이 필요합니다.'
+      });
     }
-  });
+
+    // 사용자의 전체 분석 결과 조회
+    const analysisResults = await getAnalysisResultsByUser(userId, 1000, 0);
+    
+    // 기본 통계 정보 생성
+    const stats = {
+      totalAnalyses: analysisResults.length,
+      recentAnalyses: analysisResults.slice(0, 5),
+      analysisHistory: analysisResults.map(result => ({
+        id: result.id,
+        date: new Date(result.created_at).toLocaleDateString('ko-KR'),
+        summary: result.summary.slice(0, 100) + (result.summary.length > 100 ? '...' : ''),
+        model: result.model
+      }))
+    };
+
+    res.json({
+      success: true,
+      data: stats
+    });
+
+  } catch (error) {
+    console.error('분석 통계 조회 중 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: '분석 통계 조회 중 오류가 발생했습니다.',
+      error: error.message
+    });
+  }
 });
 
 module.exports = router; 
