@@ -1,6 +1,8 @@
 const express = require('express');
 const { upload, validateFile, formatUploadError } = require('../utils/file-upload-utils');
-const { analyzeUploadedMedicalDocument } = require('../services/medical-analysis-service');
+const { analyzeUploadedMedicalDocumentWithSummary } = require('../services/medical-analysis-service');
+const { saveAnalysisResult, getAnalysisResultsByUser } = require('../config/supabase-config');
+const { verifyToken } = require('../utils/auth-utils');
 const { CATEGORY_NAMES_KR } = require('../utils/medical-document-categories');
 
 const router = express.Router();
@@ -9,7 +11,7 @@ const router = express.Router();
  * 진료 기록 업로드 및 분석 (SSE)
  * POST /api/medical/analyze
  */
-router.post('/medical/analyze', upload.single('medicalFile'), async (req, res) => {
+router.post('/medical/analyze', verifyToken, upload.single('medicalFile'), async (req, res) => {
   // SSE 헤더 설정
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
@@ -37,14 +39,27 @@ router.post('/medical/analyze', upload.single('medicalFile'), async (req, res) =
       modelName = `gpt-${modelName}`;
     }
 
+    // JWT 토큰에서 사용자 ID 추출
+    const userId = req.user.id;
+    if (!userId) {
+      res.write(`data: ${JSON.stringify({
+        type: 'error',
+        message: '유효한 사용자 인증이 필요합니다.'
+      })}\n\n`);
+      return res.end();
+    }
+
+    // 방 ID 파라미터 처리 (선택)
+    const roomId = req.body.roomId || req.query.roomId || null;
+
     // 분석 시작 알림
     res.write(`data: ${JSON.stringify({
       type: 'status',
       message: '파일 업로드 완료. 문서 카테고리를 분류하고 있습니다...'
     })}\n\n`);
 
-    // 카테고리 분류 및 통합 분석
-    const result = await analyzeUploadedMedicalDocument(req.file.buffer, req.file.mimetype, modelName);
+    // 카테고리 분류 및 통합 분석 (요약 포함)
+    const result = await analyzeUploadedMedicalDocumentWithSummary(req.file.buffer, req.file.mimetype, modelName);
     
     // 카테고리 분류 결과 전송
     res.write(`data: ${JSON.stringify({
@@ -72,6 +87,8 @@ router.post('/medical/analyze', upload.single('medicalFile'), async (req, res) =
       
       if (content) {
         accumulatedContent += content;
+        // 분석 내용 누적 (요약 생성용)
+        result.accumulateContent(content);
         
         // 대략적인 토큰 카운트 (단어 수 기준)
         tokenCount += content.split(/\s+/).length;
@@ -93,13 +110,52 @@ router.post('/medical/analyze', upload.single('medicalFile'), async (req, res) =
       }
     }
 
+    // 요약 생성 알림
+    res.write(`data: ${JSON.stringify({
+      type: 'status',
+      message: '분석 결과를 요약하고 저장하고 있습니다...'
+    })}\n\n`);
+
+    // 요약 생성
+    let summary = '';
+    try {
+      summary = await result.generateSummary();
+    } catch (summaryError) {
+      console.error('요약 생성 중 오류:', summaryError);
+      summary = '분석 완료: 자세한 내용은 전체 분석 결과를 확인해주세요.';
+    }
+
+    // 분석 결과를 Supabase에 저장
+    let savedAnalysis = null;
+    try {
+      savedAnalysis = await saveAnalysisResult({
+        userId: userId,
+        roomId: roomId,
+        model: modelName,
+        summary: summary
+      });
+      
+      res.write(`data: ${JSON.stringify({
+        type: 'info',
+        message: '분석 결과가 성공적으로 저장되었습니다.'
+      })}\n\n`);
+    } catch (saveError) {
+      console.error('분석 결과 저장 중 오류:', saveError);
+      res.write(`data: ${JSON.stringify({
+        type: 'warning',
+        message: '분석은 완료되었으나 저장 중 오류가 발생했습니다.'
+      })}\n\n`);
+    }
+
     // 분석 완료 알림
     res.write(`data: ${JSON.stringify({
       type: 'complete',
       message: `${result.categoryInfo.icon} ${result.categoryInfo.name} 문서 분석이 완료되었습니다.`,
       category: result.classification.category,
       categoryInfo: result.categoryInfo,
-      fullContent: accumulatedContent
+      fullContent: accumulatedContent,
+      summary: summary,
+      analysisId: savedAnalysis?.id || null
     })}\n\n`);
 
   } catch (error) {
@@ -121,6 +177,50 @@ router.post('/medical/analyze', upload.single('medicalFile'), async (req, res) =
     })}\n\n`);
   } finally {
     res.end();
+  }
+});
+
+/**
+ * 사용자별 분석 결과 조회
+ * GET /api/medical/analysis-history
+ */
+router.get('/medical/analysis-history', verifyToken, async (req, res) => {
+  try {
+    // JWT 토큰에서 사용자 ID 추출
+    const userId = req.user.id;
+    const limit = parseInt(req.query.limit) || 10;
+    const offset = parseInt(req.query.offset) || 0;
+
+    // 사용자 ID 검증
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        message: '유효한 사용자 인증이 필요합니다.'
+      });
+    }
+
+    // 분석 결과 조회
+    const analysisResults = await getAnalysisResultsByUser(userId, limit, offset);
+
+    res.json({
+      success: true,
+      data: {
+        analyses: analysisResults,
+        count: analysisResults.length,
+        limit: limit,
+        offset: offset,
+        userId: userId
+      },
+      message: '분석 결과를 성공적으로 조회했습니다.'
+    });
+
+  } catch (error) {
+    console.error('분석 결과 조회 중 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: '분석 결과 조회 중 오류가 발생했습니다.',
+      error: error.message
+    });
   }
 });
 

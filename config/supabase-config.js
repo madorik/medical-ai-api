@@ -19,7 +19,6 @@ if (isDevelopment && supabaseServiceKey) {
       persistSession: false
     }
   });
-  console.log('🔓 개발 모드: RLS 우회 활성화 (service_role 키 사용)');
 } else {
   // 프로덕션 환경: 일반 anon 키 사용
   supabase = createClient(supabaseUrl, supabaseKey);
@@ -96,10 +95,93 @@ async function createUserDev(userData) {
   }
 }
 
+/**
+ * 의료 분석 결과 저장
+ */
+async function saveAnalysisResult(analysisData) {
+  try {
+    const { data, error } = await supabase
+      .from('medical_analysis')
+      .insert([{
+        user_id: analysisData.userId,
+        room_id: analysisData.roomId || null,
+        model: analysisData.model,
+        summary: analysisData.summary,
+        created_at: new Date().toISOString()
+      }])
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('의료 분석 결과 저장 오류:', error);
+      throw error;
+    }
+    
+    console.log('✅ 의료 분석 결과 저장 성공:', data.id);
+    return data;
+  } catch (error) {
+    console.error('saveAnalysisResult 오류:', error);
+    throw error;
+  }
+}
+
+/**
+ * 사용자별 분석 결과 조회
+ */
+async function getAnalysisResultsByUser(userId, limit = 10, offset = 0) {
+  try {
+    const { data, error } = await supabase
+      .from('medical_analysis')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+    
+    if (error) {
+      console.error('사용자별 분석 결과 조회 오류:', error);
+      throw error;
+    }
+    
+    return data;
+  } catch (error) {
+    console.error('getAnalysisResultsByUser 오류:', error);
+    throw error;
+  }
+}
+
+/**
+ * 분석 결과 테이블 생성 SQL (개발용)
+ * 운영 환경에서는 Supabase 대시보드에서 직접 생성하세요.
+ */
+const CREATE_MEDICAL_ANALYSIS_TABLE_SQL = `
+CREATE TABLE IF NOT EXISTS medical_analysis (
+  id BIGSERIAL PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  room_id TEXT,
+  model TEXT NOT NULL,
+  summary TEXT NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 인덱스 생성
+CREATE INDEX IF NOT EXISTS idx_medical_analysis_user_id ON medical_analysis(user_id);
+CREATE INDEX IF NOT EXISTS idx_medical_analysis_created_at ON medical_analysis(created_at);
+
+-- RLS 활성화 (필요한 경우)
+-- ALTER TABLE medical_analysis ENABLE ROW LEVEL SECURITY;
+
+-- 사용자는 자신의 데이터만 볼 수 있는 정책 (필요한 경우)
+-- CREATE POLICY "Users can view own analysis results" ON medical_analysis
+--   FOR SELECT USING (auth.uid()::text = user_id);
+`;
+
 module.exports = {
   supabase,
   testConnection,
   checkRLSStatus,
   createUserDev,
+  saveAnalysisResult,
+  getAnalysisResultsByUser,
+  CREATE_MEDICAL_ANALYSIS_TABLE_SQL,
   isDevelopment
 }; 

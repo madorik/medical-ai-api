@@ -397,7 +397,97 @@ async function analyzeMedicalRecordByCategory(fileBuffer, mimeType, category, mo
 }
 
 /**
- * 통합 분석 함수 - 카테고리 분류 후 분석
+ * 분석 결과에서 요약 생성
+ */
+async function generateAnalysisSummary(fullAnalysisContent, model = '4o-mini') {
+  try {
+    const response = await openai.chat.completions.create({
+      model: model.startsWith('gpt-') ? model : `gpt-${model}`,
+      messages: [
+        {
+          role: "system",
+          content: `당신은 의료 분석 결과를 간결하게 요약하는 전문가입니다.
+주어진 의료 분석 내용을 핵심만 추출하여 3-4문장으로 요약해주세요.
+- 주요 진단이나 발견사항
+- 중요한 수치나 결과
+- 환자가 주의해야 할 핵심 사항
+- 권장사항 중 가장 중요한 것
+
+요약은 일반인이 이해하기 쉽도록 작성하되, 의학적 정확성을 유지해주세요.`
+        },
+        {
+          role: "user",
+          content: `다음 의료 분석 내용을 요약해주세요:\n\n${fullAnalysisContent}`
+        }
+      ],
+      max_tokens: 500,
+      temperature: 0.1
+    });
+
+    return response.choices[0].message.content.trim();
+  } catch (error) {
+    console.error('요약 생성 중 오류:', error);
+    return '분석 완료: 자세한 내용은 전체 분석 결과를 확인해주세요.';
+  }
+}
+
+/**
+ * 통합 분석 함수 - 카테고리 분류 후 분석 (요약 포함)
+ */
+async function analyzeUploadedMedicalDocumentWithSummary(fileBuffer, mimeType, model = '4o-mini') {
+  try {
+    let classificationResult;
+
+    // 이미지 파일인 경우 Vision API로 분류
+    if (mimeType.startsWith('image/')) {
+      classificationResult = await classifyMedicalDocumentFromImage(fileBuffer, mimeType, model);
+    } else {
+      // PDF 등 기타 파일의 경우 기본 분류
+      classificationResult = {
+        category: 'other',
+        confidence: 0.8,
+        reason: 'PDF 파일 기본 분류'
+      };
+    }
+    
+    // 카테고리별 맞춤 분석 (스트림)
+    const analysisStream = await analyzeMedicalRecordByCategory(
+      fileBuffer, 
+      mimeType, 
+      classificationResult.category,
+      model
+    );
+
+    // 전체 분석 내용을 수집하기 위한 변수
+    let fullAnalysisContent = '';
+    
+    return {
+      classification: classificationResult,
+      analysisStream: analysisStream,
+      categoryInfo: getCategoryInfo(classificationResult.category),
+      // 분석 내용을 누적하는 함수
+      accumulateContent: (content) => {
+        fullAnalysisContent += content;
+      },
+      // 최종 요약 생성 함수
+      generateSummary: async () => {
+        if (fullAnalysisContent.trim()) {
+          return await generateAnalysisSummary(fullAnalysisContent, model);
+        }
+        return '분석 완료';
+      },
+      // 전체 분석 내용 반환
+      getFullContent: () => fullAnalysisContent
+    };
+    
+  } catch (error) {
+    console.error('의료 문서 분석 중 오류:', error);
+    throw error;
+  }
+}
+
+/**
+ * 통합 분석 함수 - 카테고리 분류 후 분석 (기존 호환성 유지)
  */
 async function analyzeUploadedMedicalDocument(fileBuffer, mimeType, model = '4o-mini') {
   try {
@@ -437,6 +527,8 @@ async function analyzeUploadedMedicalDocument(fileBuffer, mimeType, model = '4o-
 
 module.exports = {
   analyzeUploadedMedicalDocument,
+  analyzeUploadedMedicalDocumentWithSummary,
+  generateAnalysisSummary,
   getCategoryInfo,
   classifyMedicalDocumentFromImage,
   analyzeMedicalRecordByCategory

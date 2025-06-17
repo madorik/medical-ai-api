@@ -11,7 +11,8 @@
     "build": "echo 'Build completed'",
     "dev": "nodemon server.js",
     "vercel-build": "echo 'Vercel build completed'",
-    "deploy": "vercel --prod"
+    "deploy": "vercel --prod",
+    "setup-db": "node utils/setup-database.js"
   },
   "keywords": [
     "express",

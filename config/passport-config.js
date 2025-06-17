@@ -62,11 +62,9 @@ passport.use(new GoogleStrategy({
         .single();
       
       if (updateError) {
-        console.error('사용자 업데이트 오류:', updateError);
         return done(updateError, null);
       }
       
-      console.log('기존 사용자 로그인:', updatedUser.email);
       return done(null, updatedUser);
     }
     
@@ -90,7 +88,6 @@ passport.use(new GoogleStrategy({
       return done(insertError, null);
     }
     
-    console.log('새 사용자 생성:', createdUser.email, '(소셜 제공자: google)');
     return done(null, createdUser);
     
   } catch (error) {

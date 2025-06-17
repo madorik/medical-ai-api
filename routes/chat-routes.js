@@ -1,7 +1,7 @@
 const express = require('express');
 const OpenAI = require('openai');
 const { verifyToken } = require('../utils/auth-utils');
-const { createClient } = require('@supabase/supabase-js');
+const { supabase, getAnalysisResultsByUser } = require('../config/supabase-config');
 
 const router = express.Router();
 
@@ -10,11 +10,46 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
-// Supabase 클라이언트 초기화
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_ANON_KEY
-);
+/**
+ * 사용자의 의료 분석 결과를 시스템 프롬프트에 포함시키는 함수
+ */
+async function buildPersonalizedSystemPrompt(userId, basePrompt) {
+  try {
+    // 사용자의 최근 의료 분석 결과 조회 (최대 5개)
+    const recentAnalyses = await getAnalysisResultsByUser(userId, 5, 0);
+    
+    if (!recentAnalyses || recentAnalyses.length === 0) {
+      return basePrompt;
+    }
+    
+    // 의료 분석 요약 정보를 시스템 프롬프트에 추가
+    const medicalContext = recentAnalyses.map((analysis, index) => {
+      const analysisDate = new Date(analysis.created_at).toLocaleDateString('ko-KR');
+      const model = analysis.model || 'AI';
+      return `${index + 1}. [${analysisDate}] ${model} 분석: ${analysis.summary}`;
+    }).join('\n');
+    
+    const personalizedPrompt = basePrompt + `
+다음은 이 사용자의 최근 의료 문서 분석 결과입니다. 이 정보를 참고하여 더 개인화된 의료 상담을 제공해주세요:
+${medicalContext}
+
+💡 **상담 시 활용 방법:**
+- 위 분석 결과와 관련된 질문이나 증상에 대해서는 구체적으로 참고하여 답변하세요
+- 기존 진단이나 처방과 연관지어 조언할 수 있습니다  
+- 하지만 여전히 새로운 진단을 내리거나 약물을 추천하지는 마세요
+- "이전 분석 결과를 보니..." 같은 방식으로 자연스럽게 참고하세요
+- 분석된 날짜를 고려하여 최근 정보를 우선적으로 참고하세요
+- 사용자가 이전 분석과 관련된 질문을 하지 않더라도, 관련성이 있다면 자연스럽게 언급해주세요
+`;
+    
+    return personalizedPrompt;
+    
+  } catch (error) {
+    console.error('의료 분석 결과 조회 중 오류:', error);
+    // 오류가 발생해도 기본 프롬프트는 사용
+    return basePrompt;
+  }
+}
 
 // 의료 상담 시스템 프롬프트
 const MEDICAL_SYSTEM_PROMPT = `
@@ -45,7 +80,7 @@ const MEDICAL_SYSTEM_PROMPT = `
 3. 응답 흐름 예시
 ──────────────────────
 1) 첫 응답:  
-   - "요즘 몸 상태가 좀 불편하신가 봐요. 어떤 점이 가장 신경 쓰이세요?"  
+   - "어떤 점이 가장 신경 쓰이세요?"  
    - "혹시 그 증상은 언제부터 시작됐을까요?"  
 
 2) 확인 후 설명:  
@@ -134,7 +169,11 @@ router.post('/stream', verifyToken, async (req, res) => {
   try {
     const { message, chatHistory = [] } = req.body;
     const requestedModel = req.body.model || req.query.model;
+    const userId = req.user.id; // JWT 토큰에서 사용자 ID 추출
+    
     console.log('requestedModel', requestedModel);
+    console.log('사용자 ID:', userId);
+    
     // 메시지 검증
     const validation = validateMessage(message);
     if (!validation.isValid) {
@@ -161,9 +200,41 @@ router.post('/stream', verifyToken, async (req, res) => {
       'Access-Control-Allow-Headers': 'Cache-Control'
     });
     
+    // 사용자 의료 분석 기록을 포함한 개인화된 시스템 프롬프트 생성
+    res.write(`data: ${JSON.stringify({ 
+      type: 'status',
+      message: '사용자의 의료 기록을 확인하고 있습니다...'
+    })}\n\n`);
+    
+    const personalizedSystemPrompt = await buildPersonalizedSystemPrompt(userId, MEDICAL_SYSTEM_PROMPT);
+    
+    // 의료 기록 확인 결과 사용자에게 알림
+    try {
+      const recentAnalyses = await getAnalysisResultsByUser(userId, 5, 0);
+      if (recentAnalyses && recentAnalyses.length > 0) {
+        res.write(`data: ${JSON.stringify({ 
+          type: 'info',
+          message: `✅ ${recentAnalyses.length}개의 의료 분석 기록을 참고하여 개인화된 상담을 제공합니다.`
+        })}\n\n`);
+      } else {
+        res.write(`data: ${JSON.stringify({ 
+          type: 'info',
+          message: '💡 의료 문서를 먼저 분석하시면 더 정확한 개인화 상담을 받으실 수 있습니다.'
+        })}\n\n`);
+      }
+    } catch (error) {
+      console.error('의료 기록 확인 중 오류:', error);
+    }
+    
+    // AI 응답 생성 시작 알림
+    res.write(`data: ${JSON.stringify({ 
+      type: 'status',
+      message: 'AI가 답변을 생성하고 있습니다...'
+    })}\n\n`);
+    
     // 응급 상황 감지
     const isEmergency = detectEmergency(cleanMessage);
-    let systemPrompt = MEDICAL_SYSTEM_PROMPT;
+    let systemPrompt = personalizedSystemPrompt;
     
     if (isEmergency) {
       systemPrompt += `\n\n⚠️ 응급 상황이 감지되었습니다. 이 경우 즉시 119에 신고하거나 가까운 응급실을 방문하도록 강력히 권유하고, 의료 조치가 우선임을 강조하세요.`;
@@ -179,7 +250,7 @@ router.post('/stream', verifyToken, async (req, res) => {
       ])).flat(),
       { role: 'user', content: cleanMessage }
     ];
-    
+
     // Validate messages to ensure all have non-null content
     const validMessages = messages.filter(msg => msg.content !== null && msg.content !== undefined);
     
@@ -211,12 +282,15 @@ router.post('/stream', verifyToken, async (req, res) => {
         }
       }
       
-      // 스트리밍 종료 신호
+      // 스트리밍 종료 신호 (개인화 정보 포함)
+      const hasPersonalizedData = systemPrompt !== MEDICAL_SYSTEM_PROMPT;
       res.write(`data: ${JSON.stringify({ 
         type: 'end',
         fullResponse,
         isEmergency,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        personalized: hasPersonalizedData,
+        userId: userId
       })}\n\n`);
       
     } catch (openaiError) {
