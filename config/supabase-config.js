@@ -107,6 +107,7 @@ async function saveAnalysisResult(analysisData) {
         room_id: analysisData.roomId || null,
         model: analysisData.model,
         summary: analysisData.summary,
+        document_type: analysisData.documentType || 'other',
         created_at: new Date().toISOString()
       }])
       .select()
@@ -132,7 +133,7 @@ async function getAnalysisResultsByUser(userId, limit = 10, offset = 0) {
   try {
     const { data, error } = await supabase
       .from('medical_analysis')
-      .select('*')
+      .select('id, model, summary, document_type, created_at, room_id')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
@@ -160,12 +161,14 @@ CREATE TABLE IF NOT EXISTS medical_analysis (
   room_id TEXT,
   model TEXT NOT NULL,
   summary TEXT NOT NULL,
+  document_type TEXT DEFAULT 'other',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- 인덱스 생성
 CREATE INDEX IF NOT EXISTS idx_medical_analysis_user_id ON medical_analysis(user_id);
 CREATE INDEX IF NOT EXISTS idx_medical_analysis_created_at ON medical_analysis(created_at);
+CREATE INDEX IF NOT EXISTS idx_medical_analysis_document_type ON medical_analysis(document_type);
 
 -- RLS 활성화 (필요한 경우)
 -- ALTER TABLE medical_analysis ENABLE ROW LEVEL SECURITY;

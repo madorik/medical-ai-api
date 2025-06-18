@@ -1,5 +1,6 @@
 const OpenAI = require('openai');
 const pdfParse = require('pdf-parse');
+const { MEDICAL_DOCUMENT_CATEGORIES, CATEGORY_NAMES_KR } = require('../utils/medical-document-categories');
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -124,6 +125,35 @@ ${NOTION_MARKDOWN_STYLE}
 - 불확실한 내용은 추측하지 말고 확인 가능한 정보만 제공할 것
 `;
 
+// 문서 유형 분류를 위한 프롬프트
+const DOCUMENT_CLASSIFICATION_PROMPT = `
+너는 의료 문서의 유형을 정확히 분류하는 전문가다. 
+업로드된 이미지나 텍스트에서 의료 문서의 종류를 파악하여 다음 카테고리 중 하나로 분류해야 한다:
+
+분류 카테고리:
+- medical_record: 진료기록/차트
+- diagnosis_report: 진단서  
+- medical_opinion: 소견서
+- referral_letter: 의뢰서/회송서
+- prescription: 처방전
+- medication_guide: 복약지도서
+- pharmacy_receipt: 약국 영수증/계산서
+- lab_result: 혈액/소변 등 검사결과
+- imaging_result: 영상검사 (CT, MRI, X-ray 등)
+- health_checkup: 건강검진 결과
+- pathology_report: 병리검사 보고서
+- hospital_bill: 병원 진료비 영수증
+- insurance_claim: 보험청구서
+- medical_certificate: 진료확인서
+- vaccination_record: 예방접종 증명서
+- disability_assessment: 장애진단서
+- fitness_certificate: 건강진단서
+- discharge_summary: 퇴원요약서
+- other: 기타 의료 관련 문서
+
+반드시 위 카테고리 중 하나만을 정확히 응답하라. 추가 설명 없이 카테고리명만 출력하라.
+`;
+
 /**
  * 업로드된 의료 문서를 상세 분석
  */
@@ -226,10 +256,13 @@ async function generateAnalysisSummary(fullAnalysisContent, model = '4o-mini') {
 }
 
 /**
- * 의료 문서 분석 (요약 포함)
+ * 의료 문서 분석 (요약 및 문서 유형 분류 포함)
  */
 async function analyzeUploadedMedicalDocumentWithSummary(fileBuffer, mimeType, model = '4o-mini') {
   try {
+    // 문서 유형 먼저 분류
+    const documentType = await classifyMedicalDocumentType(fileBuffer, mimeType, model);
+    
     // 직접 상세 분석 수행
     const analysisStream = await analyzeMedicalDocument(fileBuffer, mimeType, model);
 
@@ -237,6 +270,8 @@ async function analyzeUploadedMedicalDocumentWithSummary(fileBuffer, mimeType, m
     let fullAnalysisContent = '';
     
     return {
+      documentType: documentType, // 문서 유형 추가
+      documentTypeName: CATEGORY_NAMES_KR[documentType] || '기타', // 한국어 이름 추가
       analysisStream: analysisStream,
       // 분석 내용을 누적하는 함수
       accumulateContent: (content) => {
@@ -248,11 +283,8 @@ async function analyzeUploadedMedicalDocumentWithSummary(fileBuffer, mimeType, m
           return await generateAnalysisSummary(fullAnalysisContent, model);
         }
         return '분석 완료';
-      },
-      // 전체 분석 내용 반환
-      getFullContent: () => fullAnalysisContent
+      }
     };
-    
   } catch (error) {
     console.error('의료 문서 분석 중 오류:', error);
     throw error;
@@ -277,9 +309,94 @@ async function analyzeUploadedMedicalDocument(fileBuffer, mimeType, model = '4o-
   }
 }
 
+/**
+ * 의료 문서 유형 자동 분류
+ */
+async function classifyMedicalDocumentType(fileBuffer, mimeType, model = '4o-mini') {
+  try {
+    let content = '';
+    
+    // PDF 파일 처리
+    if (mimeType === 'application/pdf') {
+      const pdfData = await pdfParse(fileBuffer);
+      content = pdfData.text.slice(0, 2000); // 처음 2000자만 사용
+    }
+
+    // 이미지 파일인 경우 Vision API 사용
+    if (mimeType.startsWith('image/')) {
+      const base64Image = fileBuffer.toString('base64');
+      const response = await openai.chat.completions.create({
+        model: model.startsWith('gpt-') ? model : `gpt-${model}`,
+        messages: [
+          {
+            role: "system",
+            content: DOCUMENT_CLASSIFICATION_PROMPT
+          },
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: "이 의료 문서의 유형을 분류해주세요."
+              },
+              {
+                type: "image_url",
+                image_url: {
+                  url: `data:${mimeType};base64,${base64Image}`
+                }
+              }
+            ]
+          }
+        ],
+        max_tokens: 50,
+        temperature: 0.1
+      });
+
+      const documentType = response.choices[0].message.content.trim();
+      
+      // 유효한 카테고리인지 확인
+      if (Object.values(MEDICAL_DOCUMENT_CATEGORIES).includes(documentType)) {
+        return documentType;
+      }
+      
+      return MEDICAL_DOCUMENT_CATEGORIES.other;
+    } else {
+      // 텍스트 기반 분류
+      const response = await openai.chat.completions.create({
+        model: model.startsWith('gpt-') ? model : `gpt-${model}`,
+        messages: [
+          {
+            role: "system",
+            content: DOCUMENT_CLASSIFICATION_PROMPT
+          },
+          {
+            role: "user",
+            content: `다음 의료 문서의 유형을 분류해주세요:\n\n${content}`
+          }
+        ],
+        max_tokens: 50,
+        temperature: 0.1
+      });
+
+      const documentType = response.choices[0].message.content.trim();
+      
+      // 유효한 카테고리인지 확인
+      if (Object.values(MEDICAL_DOCUMENT_CATEGORIES).includes(documentType)) {
+        return documentType;
+      }
+      
+      return MEDICAL_DOCUMENT_CATEGORIES.other;
+    }
+  } catch (error) {
+    console.error('문서 유형 분류 중 오류:', error);
+    return MEDICAL_DOCUMENT_CATEGORIES.other; // 오류 시 기타로 분류
+  }
+}
+
 module.exports = {
   analyzeUploadedMedicalDocument,
   analyzeUploadedMedicalDocumentWithSummary,
   generateAnalysisSummary,
-  analyzeMedicalDocument
+  analyzeMedicalDocument,
+  classifyMedicalDocumentType
 }; 

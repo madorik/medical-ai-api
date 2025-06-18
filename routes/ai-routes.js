@@ -3,6 +3,7 @@ const { upload, validateFile, formatUploadError } = require('../utils/file-uploa
 const { analyzeUploadedMedicalDocumentWithSummary } = require('../services/medical-analysis-service');
 const { saveAnalysisResult, getAnalysisResultsByUser } = require('../config/supabase-config');
 const { verifyToken } = require('../utils/auth-utils');
+const { CATEGORY_NAMES_KR } = require('../utils/medical-document-categories');
 
 const router = express.Router();
 
@@ -60,10 +61,10 @@ router.post('/medical/analyze', verifyToken, upload.single('medicalFile'), async
     // 직접 상세 분석 수행 (요약 포함)
     const result = await analyzeUploadedMedicalDocumentWithSummary(req.file.buffer, req.file.mimetype, modelName);
     
-    // 분석 시작 알림
+    // 분석 시작 알림 (문서 유형 포함)
     res.write(`data: ${JSON.stringify({
       type: 'status',
-      message: '📋 의료 문서 분석을 시작합니다. 문서의 종류와 내용을 자동으로 파악하여 상세히 분석합니다...'
+      message: `📋 ${result.documentTypeName} 문서를 분석하고 있습니다. 문서의 내용을 자동으로 파악하여 상세히 분석합니다...`
     })}\n\n`);
 
     // 스트리밍 분석 결과 처리
@@ -121,7 +122,8 @@ router.post('/medical/analyze', verifyToken, upload.single('medicalFile'), async
         userId: userId,
         roomId: roomId,
         model: modelName,
-        summary: summary
+        summary: summary,
+        documentType: result.documentType
       });
       
       res.write(`data: ${JSON.stringify({
@@ -139,10 +141,12 @@ router.post('/medical/analyze', verifyToken, upload.single('medicalFile'), async
     // 분석 완료 알림
     res.write(`data: ${JSON.stringify({
       type: 'complete',
-      message: '📋 의료 문서 분석이 완료되었습니다.',
+      message: `📋 ${result.documentTypeName} 문서 분석이 완료되었습니다.`,
       fullContent: accumulatedContent,
       summary: summary,
-      analysisId: savedAnalysis?.id || null
+      analysisId: savedAnalysis?.id || null,
+      documentType: result.documentType,
+      documentTypeName: result.documentTypeName
     })}\n\n`);
 
   } catch (error) {
@@ -194,6 +198,7 @@ router.get('/medical/analysis-history', verifyToken, async (req, res) => {
       id: result.id,
       model: result.model,
       summary: result.summary,
+      document_type: result.document_type || 'other',
       created_at: result.created_at,
       room_id: result.room_id
     }));
@@ -233,14 +238,47 @@ router.get('/medical/analysis-stats', verifyToken, async (req, res) => {
     // 사용자의 전체 분석 결과 조회
     const analysisResults = await getAnalysisResultsByUser(userId, 1000, 0);
     
+    // 문서 유형별 통계 생성
+    const documentTypeStats = {};
+    analysisResults.forEach(result => {
+      const documentType = result.document_type || 'other';
+      if (!documentTypeStats[documentType]) {
+        documentTypeStats[documentType] = {
+          count: 0,
+          typeName: CATEGORY_NAMES_KR[documentType] || '기타',
+          recentAnalyses: []
+        };
+      }
+      documentTypeStats[documentType].count++;
+      
+      // 최신 3개 분석 결과만 포함
+      if (documentTypeStats[documentType].recentAnalyses.length < 3) {
+        documentTypeStats[documentType].recentAnalyses.push({
+          id: result.id,
+          summary: result.summary.slice(0, 100) + (result.summary.length > 100 ? '...' : ''),
+          created_at: result.created_at
+        });
+      }
+    });
+    
     // 기본 통계 정보 생성
     const stats = {
       totalAnalyses: analysisResults.length,
-      recentAnalyses: analysisResults.slice(0, 5),
+      documentTypeStats: documentTypeStats,
+      recentAnalyses: analysisResults.slice(0, 5).map(result => ({
+        id: result.id,
+        date: new Date(result.created_at).toLocaleDateString('ko-KR'),
+        summary: result.summary.slice(0, 100) + (result.summary.length > 100 ? '...' : ''),
+        documentType: result.document_type || 'other',
+        documentTypeName: CATEGORY_NAMES_KR[result.document_type] || '기타',
+        model: result.model
+      })),
       analysisHistory: analysisResults.map(result => ({
         id: result.id,
         date: new Date(result.created_at).toLocaleDateString('ko-KR'),
         summary: result.summary.slice(0, 100) + (result.summary.length > 100 ? '...' : ''),
+        documentType: result.document_type || 'other',
+        documentTypeName: CATEGORY_NAMES_KR[result.document_type] || '기타',
         model: result.model
       }))
     };
