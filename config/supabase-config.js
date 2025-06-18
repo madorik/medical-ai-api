@@ -1,4 +1,5 @@
 const { createClient } = require('@supabase/supabase-js');
+const { encryptText, safeDecrypt } = require('../utils/encryption-utils');
 
 // Supabase 설정
 const supabaseUrl = process.env.SUPABASE_URL || 'https://your-project.supabase.co';
@@ -100,13 +101,16 @@ async function createUserDev(userData) {
  */
 async function saveAnalysisResult(analysisData) {
   try {
+    // summary를 암호화
+    const encryptedSummary = encryptText(analysisData.summary);
+    
     const { data, error } = await supabase
       .from('medical_analysis')
       .insert([{
         user_id: analysisData.userId,
         room_id: analysisData.roomId || null,
         model: analysisData.model,
-        summary: analysisData.summary,
+        summary: encryptedSummary, // 암호화된 summary 저장
         document_type: analysisData.documentType || 'other',
         created_at: new Date().toISOString()
       }])
@@ -118,7 +122,7 @@ async function saveAnalysisResult(analysisData) {
       throw error;
     }
     
-    console.log('✅ 의료 분석 결과 저장 성공:', data.id);
+    console.log('✅ 의료 분석 결과 저장 성공 (암호화됨):', data.id);
     return data;
   } catch (error) {
     console.error('saveAnalysisResult 오류:', error);
@@ -143,7 +147,13 @@ async function getAnalysisResultsByUser(userId, limit = 10, offset = 0) {
       throw error;
     }
     
-    return data;
+    // summary를 복호화하여 반환
+    const decryptedData = data.map(result => ({
+      ...result,
+      summary: safeDecrypt(result.summary) // 안전한 복호화 (기존 데이터 호환)
+    }));
+    
+    return decryptedData;
   } catch (error) {
     console.error('getAnalysisResultsByUser 오류:', error);
     throw error;

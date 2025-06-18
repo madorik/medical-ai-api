@@ -19,15 +19,20 @@ OPENAI_API_KEY=your-openai-api-key
 # https://supabase.com 에서 프로젝트 생성 후 발급받으세요
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_ANON_KEY=your-supabase-anon-key
+SUPABASE_SERVICE_ROLE_KEY=your-supabase-service-role-key
 
 # JWT 토큰 설정
 JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
+JWT_EXPIRES_IN=7d
 
 # 세션 설정
 SESSION_SECRET=your-session-secret-key-change-this-in-production
 
 # 프론트엔드 URL (CORS 설정용)
 FRONTEND_URL=http://localhost:3000
+
+# 데이터 암호화 설정
+ENCRYPTION_KEY=your-32-character-encryption-key-for-medical-data-security
 
 # ================================================================
 # 🛠️ 설정 가이드

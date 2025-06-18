@@ -11,9 +11,11 @@ OpenAI와 Google OAuth를 활용한 의료 진료 기록 분석 및 상담 채�
 
 ### 🤖 AI 진료 기록 분석 
 - **파일 업로드**: JPG, PNG, PDF (최대 5MB)
+- **자동 문서 분류**: AI가 업로드된 파일의 의료 문서 유형을 자동 분류 (건강검진, 처방전, 영수증 등)
 - **진료 기록 자동 검증**: AI가 업로드된 파일이 진료 기록인지 자동 확인
 - **실시간 스트리밍 분석**: SSE(Server-Sent Events)를 통한 실시간 분석 결과 전송
 - **구조화된 JSON 응답**: 환자 정보, 진단명, 처방전, 검사 결과 등을 체계적으로 분석
+- **AES256 암호화**: 의료 데이터는 AES256-GCM으로 암호화되어 안전하게 저장
 
 ### 💬 AI 의료 상담 채팅
 - **개인화된 상담**: 사용자의 의료 분석 기록을 바탕으로 한 맞춤형 상담
@@ -110,7 +112,9 @@ GOOGLE_CLIENT_ID=your_google_client_id
 GOOGLE_CLIENT_SECRET=your_google_client_secret
 SUPABASE_URL=your_supabase_url
 SUPABASE_ANON_KEY=your_supabase_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 SESSION_SECRET=your_session_secret
+ENCRYPTION_KEY=your_32_character_encryption_key_for_medical_data
 PORT=3000
 NODE_ENV=development
 ```
@@ -145,7 +149,9 @@ Vercel 대시보드에서 다음 환경변수들을 설정하세요:
 - `GOOGLE_CLIENT_SECRET`
 - `SUPABASE_URL`
 - `SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
 - `SESSION_SECRET`
+- `ENCRYPTION_KEY`
 - `NODE_ENV=production`
 
 자세한 배포 가이드는 `deploy-guide.md` 파일을 참고하세요.
