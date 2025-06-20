@@ -60,55 +60,6 @@ const DETAILED_MEDICAL_ANALYSIS_PROMPT = `
 # 중요 포인트
 > 환자가 반드시 알아야 할 핵심 사항들
 
-# 주요 내용 분석
-## 진단 및 상태 (해당 없으면 제외)
-- **주 진단**
-  - 주요 진단명과 상병코드
-- **부 진단**
-  - 추가 진단사항  
-- **현재 상태**
-  - 환자의 현재 건강 상태
-- **증상**
-  - 주요 증상과 경과
-  
-## 치료 내용 (해당 없으면 제외)
-- **처방 약물**
-  - 약물명과 성분
-  - 용법 용량 (복용 방법)
-  - 치료 목적과 효과
-  - 예상 부작용
-- **치료 계획**
-  - 향후 치료 방향
-- **추적 검사**
-  - 필요한 추가 검사
-  
-## 검사 결과 (해당 없으면 제외)
-- **정상 수치**
-  - 정상 범위 내 항목들
-- **이상 수치**
-  - 비정상 수치와 정상 범위
-  - 의학적 의미와 위험도  
-  - 개선 방법
-- **종합 해석**
-  - 전체적인 건강 상태 평가
-   
-## 비용 정보 (해당없으면 제외)
-- **총 진료비**: 전체 비용
-- **보험 적용**: 급여/비급여 구분
-- **본인부담금**: 실제 지불 금액
-- **세부 내역**
-  - 항목별 비용 분석
-  
-# 권장사항
-- **복약 지침**
-  - 정확한 복용법
-- **생활 관리**
-  - 일상 생활에서 주의사항
-- **추후 진료**
-  - 다음 진료 일정이나 응급상황 대응
-- **예방법**
-  - 재발 방지나 건강 유지 방법
-  
 # 추가 설명
 ## 의학 용어
 - 어려운 의학 용어 상세 설명
@@ -116,6 +67,7 @@ const DETAILED_MEDICAL_ANALYSIS_PROMPT = `
 ## 참고사항
 - 환자가 알면 도움될 추가 정보
 
+이 외에 사용자에게 필요한 정보가 있다면 최대한 상세히 제공하라.
 ${NOTION_MARKDOWN_STYLE}
 
 **주의사항:**
@@ -292,24 +244,6 @@ async function analyzeUploadedMedicalDocumentWithSummary(fileBuffer, mimeType, m
 }
 
 /**
- * 의료 문서 분석 (기존 호환성 유지)
- */
-async function analyzeUploadedMedicalDocument(fileBuffer, mimeType, model = '4o-mini') {
-  try {
-    // 직접 상세 분석 수행
-    const analysisStream = await analyzeMedicalDocument(fileBuffer, mimeType, model);
-    
-    return {
-      analysisStream: analysisStream
-    };
-    
-  } catch (error) {
-    console.error('의료 문서 분석 중 오류:', error);
-    throw error;
-  }
-}
-
-/**
  * 의료 문서 유형 자동 분류
  */
 async function classifyMedicalDocumentType(fileBuffer, mimeType, model = '4o-mini') {
@@ -394,9 +328,5 @@ async function classifyMedicalDocumentType(fileBuffer, mimeType, model = '4o-min
 }
 
 module.exports = {
-  analyzeUploadedMedicalDocument,
-  analyzeUploadedMedicalDocumentWithSummary,
-  generateAnalysisSummary,
-  analyzeMedicalDocument,
-  classifyMedicalDocumentType
-}; 
+  analyzeUploadedMedicalDocumentWithSummary
+};
