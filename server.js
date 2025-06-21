@@ -99,7 +99,7 @@ app.get('/', (req, res) => {
     timestamp: new Date().toISOString(),
     availableEndpoints: {
       auth: '/auth/google, /auth/google/callback, /auth/status, /auth/profile, /auth/logout',
-      medical: '/api/medical/analyze, /api/medical/analysis-history, /api/medical/analysis-stats',
+      medical: '/api/medical/analyze, /api/medical/analysis-history, /api/medical/analysis-stats, /api/medical/check-analysis-limit',
       chatRooms: '/api/medical/chat-rooms (GET/POST), /api/medical/chat-rooms/{roomId} (GET/PUT)',
       chat: '/chat/stream',
       email: '/api/email/send',
@@ -116,7 +116,7 @@ app.use('*', (req, res) => {
     message: `${req.method} ${req.originalUrl}는 지원되지 않는 경로입니다.`,
     availableEndpoints: {
       auth: '/auth/profile, /auth/logout',
-      medical: '/api/medical/analyze, /api/medical/analysis-history, /api/medical/analysis-stats',
+      medical: '/api/medical/analyze, /api/medical/analysis-history, /api/medical/analysis-stats, /api/medical/check-analysis-limit',
       chatRooms: '/api/medical/chat-rooms (GET/POST), /api/medical/chat-rooms/{roomId} (GET/PUT)',
       chat: '/chat/stream',
       email: '/api/email/send',

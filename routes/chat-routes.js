@@ -1,7 +1,8 @@
 const express = require('express');
 const OpenAI = require('openai');
 const { verifyToken } = require('../utils/auth-utils');
-const { supabase, getAnalysisResultsByUser } = require('../config/supabase-config');
+const { supabase, getAnalysisResultsByUser, getChatRoomById } = require('../config/supabase-config');
+const { CATEGORY_NAMES_KR } = require('../utils/medical-document-categories');
 
 const router = express.Router();
 
@@ -11,33 +12,68 @@ const openai = new OpenAI({
 });
 
 /**
- * 사용자의 의료 분석 결과를 시스템 프롬프트에 포함시키는 함수
+ * 채팅방의 의료 분석 결과를 시스템 프롬프트에 포함시키는 함수
  */
-async function buildPersonalizedSystemPrompt(userId, basePrompt) {
+async function buildPersonalizedSystemPrompt(userId, basePrompt, roomId = null) {
   try {
-    // 사용자의 최근 의료 분석 결과 조회 (최대 5개)
-    const recentAnalyses = await getAnalysisResultsByUser(userId, 5, 0);
+    let medicalContext = '';
     
-    if (!recentAnalyses || recentAnalyses.length === 0) {
-      return basePrompt;
+    if (roomId) {
+      // roomId가 있으면 해당 채팅방의 분석 결과만 조회
+      const chatRoom = await getChatRoomById(roomId, userId);
+      
+      if (chatRoom && chatRoom.medical_analysis) {
+        const analysis = chatRoom.medical_analysis;
+        const analysisDate = new Date(analysis.created_at).toLocaleDateString('ko-KR');
+        const model = analysis.model || 'AI';
+        const documentTypeName = CATEGORY_NAMES_KR[analysis.document_type] || '의료 문서';
+        
+        medicalContext = `현재 채팅방의 의료 문서 분석 결과:
+📋 [${analysisDate}] ${documentTypeName} - ${model} 분석
+📝 요약: ${analysis.summary}
+
+${analysis.result ? `📄 상세 분석 내용:
+${analysis.result}` : ''}`;
+      } else {
+        // 채팅방은 있지만 분석 결과가 없는 경우
+        return basePrompt + `
+💡 **안내:** 현재 채팅방에는 아직 분석된 의료 문서가 없습니다. 
+의료 문서를 업로드하여 분석하시면 더 구체적이고 개인화된 상담을 받으실 수 있습니다.
+`;
+      }
+    } else {
+      // roomId가 없으면 사용자의 최근 의료 분석 결과 조회 (최대 5개)
+      const recentAnalyses = await getAnalysisResultsByUser(userId, 5, 0);
+      
+      if (!recentAnalyses || recentAnalyses.length === 0) {
+        return basePrompt + `
+💡 **안내:** 아직 분석된 의료 문서가 없습니다. 
+의료 문서를 업로드하여 분석하시면 더 구체적이고 개인화된 상담을 받으실 수 있습니다.
+`;
+      }
+      
+      // 의료 분석 요약 정보를 시스템 프롬프트에 추가
+      medicalContext = recentAnalyses.map((analysis, index) => {
+        const analysisDate = new Date(analysis.created_at).toLocaleDateString('ko-KR');
+        const model = analysis.model || 'AI';
+        const documentTypeName = CATEGORY_NAMES_KR[analysis.document_type] || '의료 문서';
+        return `${index + 1}. [${analysisDate}] ${documentTypeName} - ${model} 분석: ${analysis.summary}`;
+      }).join('\n');
+
+      medicalContext = `사용자의 최근 의료 문서 분석 결과들:
+${medicalContext}`;
     }
-    
-    // 의료 분석 요약 정보를 시스템 프롬프트에 추가
-    const medicalContext = recentAnalyses.map((analysis, index) => {
-      const analysisDate = new Date(analysis.created_at).toLocaleDateString('ko-KR');
-      const model = analysis.model || 'AI';
-      return `${index + 1}. [${analysisDate}] ${model} 분석: ${analysis.summary}`;
-    }).join('\n');
 
     return basePrompt + `
-다음은 이 사용자의 최근 의료 문서 분석 결과입니다. 이 정보를 참고하여 더 개인화된 의료 상담을 제공해주세요:
+
+다음은 이 사용자의 의료 문서 분석 결과입니다. 이 정보를 참고하여 더 개인화된 의료 상담을 제공해주세요:
 ${medicalContext}
 
 💡 **상담 시 활용 방법:**
 - 위 분석 결과와 관련된 질문이나 증상에 대해서는 구체적으로 참고하여 답변하세요
 - 기존 진단이나 처방과 연관지어 조언할 수 있습니다  
 - 하지만 여전히 새로운 진단을 내리거나 약물을 추천하지는 마세요
-- "이전 분석 결과를 보니..." 같은 방식으로 자연스럽게 참고하세요
+- "분석 결과를 보니..." 같은 방식으로 자연스럽게 참고하세요
 - 분석된 날짜를 고려하여 최근 정보를 우선적으로 참고하세요
 - 사용자가 이전 분석과 관련된 질문을 하지 않더라도, 관련성이 있다면 자연스럽게 언급해주세요
 `;
@@ -157,9 +193,10 @@ function detectEmergency(message) {
 // SSE 스트리밍 채팅
 router.post('/stream', verifyToken, async (req, res) => {
   try {
-    const { message, chatHistory = [] } = req.body;
+    const { message, chatHistory = [], roomId } = req.body;
     const requestedModel = req.body.model || req.query.model;
     const userId = req.user.id; // JWT 토큰에서 사용자 ID 추출
+
     // 메시지 검증
     const validation = validateMessage(message);
     if (!validation.isValid) {
@@ -192,21 +229,39 @@ router.post('/stream', verifyToken, async (req, res) => {
       message: '사용자의 의료 기록을 확인하고 있습니다...'
     })}\n\n`);
     
-    const personalizedSystemPrompt = await buildPersonalizedSystemPrompt(userId, MEDICAL_SYSTEM_PROMPT);
+    const personalizedSystemPrompt = await buildPersonalizedSystemPrompt(userId, MEDICAL_SYSTEM_PROMPT, roomId);
     
     // 의료 기록 확인 결과 사용자에게 알림
     try {
-      const recentAnalyses = await getAnalysisResultsByUser(userId, 5, 0);
-      if (recentAnalyses && recentAnalyses.length > 0) {
-        res.write(`data: ${JSON.stringify({ 
-          type: 'info',
-          message: `✅ ${recentAnalyses.length}개의 의료 분석 기록을 참고하여 개인화된 상담을 제공합니다.`
-        })}\n\n`);
+      if (roomId) {
+        // 특정 채팅방의 분석 결과 확인
+        const chatRoom = await getChatRoomById(roomId, userId);
+        if (chatRoom && chatRoom.medical_analysis) {
+          const documentTypeName = CATEGORY_NAMES_KR[chatRoom.medical_analysis.document_type] || '의료 문서';
+          res.write(`data: ${JSON.stringify({ 
+            type: 'info',
+            message: `✅ 현재 채팅방의 ${documentTypeName} 분석 결과를 참고하여 개인화된 상담을 제공합니다.`
+          })}\n\n`);
+        } else {
+          res.write(`data: ${JSON.stringify({ 
+            type: 'info',
+            message: '💡 현재 채팅방에 분석된 의료 문서가 없습니다. 의료 문서를 업로드하여 분석하시면 더 정확한 상담을 받으실 수 있습니다.'
+          })}\n\n`);
+        }
       } else {
-        res.write(`data: ${JSON.stringify({ 
-          type: 'info',
-          message: '💡 의료 문서를 먼저 분석하시면 더 정확한 개인화 상담을 받으실 수 있습니다.'
-        })}\n\n`);
+        // 사용자의 전체 분석 결과 확인
+        const recentAnalyses = await getAnalysisResultsByUser(userId, 5, 0);
+        if (recentAnalyses && recentAnalyses.length > 0) {
+          res.write(`data: ${JSON.stringify({ 
+            type: 'info',
+            message: `✅ ${recentAnalyses.length}개의 의료 분석 기록을 참고하여 개인화된 상담을 제공합니다.`
+          })}\n\n`);
+        } else {
+          res.write(`data: ${JSON.stringify({ 
+            type: 'info',
+            message: '💡 의료 문서를 먼저 분석하시면 더 정확한 개인화 상담을 받으실 수 있습니다.'
+          })}\n\n`);
+        }
       }
     } catch (error) {
       console.error('의료 기록 확인 중 오류:', error);

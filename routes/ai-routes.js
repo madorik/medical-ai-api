@@ -1,7 +1,7 @@
 const express = require('express');
 const { upload, validateFile, formatUploadError } = require('../utils/file-upload-utils');
 const { analyzeUploadedMedicalDocumentWithSummary } = require('../services/medical-analysis-service');
-const { saveAnalysisResult, getAnalysisResultsByUser, createChatRoom, getChatRoomsByUser, getChatRoomById, linkAnalysisToRoom, updateChatRoom } = require('../config/supabase-config');
+const { saveAnalysisResult, getAnalysisResultsByUser, createChatRoom, getChatRoomsByUser, getChatRoomById, linkAnalysisToRoom, updateChatRoom, checkChatRoomLimit } = require('../config/supabase-config');
 const { verifyToken } = require('../utils/auth-utils');
 const { CATEGORY_NAMES_KR } = require('../utils/medical-document-categories');
 
@@ -532,6 +532,46 @@ router.put('/medical/chat-rooms/:roomId', verifyToken, async (req, res) => {
     res.status(500).json({
       success: false,
       message: '채팅방 제목 수정 중 오류가 발생했습니다.',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * 분석 요청 가능 여부 체크
+ * GET /api/medical/check-analysis-limit
+ */
+router.get('/medical/check-analysis-limit', verifyToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // 사용자 ID 검증
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        message: '유효한 사용자 인증이 필요합니다.'
+      });
+    }
+
+    // 채팅방 생성 제한 확인
+    const limitCheck = await checkChatRoomLimit(userId);
+
+    res.json({
+      success: true,
+      data: {
+        canCreateAnalysis: limitCheck.canCreate,
+        message: limitCheck.message,
+        currentCount: limitCheck.currentCount || 0,
+        limit: limitCheck.limit || null,
+        isPremium: limitCheck.limit ? false : true // limit이 없으면 프리미엄으로 간주
+      }
+    });
+
+  } catch (error) {
+    console.error('분석 제한 확인 중 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: '분석 제한 확인 중 오류가 발생했습니다.',
       error: error.message
     });
   }

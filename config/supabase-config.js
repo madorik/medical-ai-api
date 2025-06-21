@@ -331,6 +331,93 @@ async function updateChatRoom(roomId, updates) {
 }
 
 /**
+ * 사용자의 채팅방 개수 확인
+ */
+async function getChatRoomCount(userId) {
+  try {
+    const { count, error } = await supabase
+      .from('chat_room')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId);
+    
+    if (error) {
+      console.error('채팅방 개수 조회 오류:', error);
+      throw error;
+    }
+    
+    return count || 0;
+  } catch (error) {
+    console.error('getChatRoomCount 오류:', error);
+    throw error;
+  }
+}
+
+/**
+ * 사용자의 프리미엄 상태 확인
+ * TODO: 실제 사용자 테이블 구조에 맞게 수정 필요
+ */
+async function checkUserPremiumStatus(userId) {
+  try {
+    // 임시로 false 반환 (추후 실제 사용자 테이블에서 조회)
+    // const { data, error } = await supabase
+    //   .from('users')
+    //   .select('is_premium')
+    //   .eq('id', userId)
+    //   .single();
+    
+    // if (error) {
+    //   console.error('사용자 프리미엄 상태 조회 오류:', error);
+    //   return false;
+    // }
+    
+    // return data?.is_premium || false;
+    
+    // 현재는 모든 사용자를 무료 사용자로 간주
+    return false;
+  } catch (error) {
+    console.error('checkUserPremiumStatus 오류:', error);
+    return false;
+  }
+}
+
+/**
+ * 채팅방 생성 제한 확인
+ */
+async function checkChatRoomLimit(userId) {
+  try {
+    const isPremium = await checkUserPremiumStatus(userId);
+    
+    // 프리미엄 사용자는 무제한
+    if (isPremium) {
+      return { canCreate: true, message: '프리미엄 사용자: 무제한 생성 가능' };
+    }
+    
+    // 무료 사용자는 3개 제한
+    const currentCount = await getChatRoomCount(userId);
+    const FREE_LIMIT = 3;
+    
+    if (currentCount >= FREE_LIMIT) {
+      return { 
+        canCreate: false, 
+        message: `무료 사용자는 최대 ${FREE_LIMIT}개의 채팅방만 생성할 수 있습니다. 현재 ${currentCount}개 사용 중입니다.`,
+        currentCount,
+        limit: FREE_LIMIT
+      };
+    }
+    
+    return { 
+      canCreate: true, 
+      message: `채팅방 생성 가능 (${currentCount}/${FREE_LIMIT})`,
+      currentCount,
+      limit: FREE_LIMIT
+    };
+  } catch (error) {
+    console.error('checkChatRoomLimit 오류:', error);
+    return { canCreate: false, message: '채팅방 제한 확인 중 오류가 발생했습니다.' };
+  }
+}
+
+/**
  * 분석 결과 테이블 생성 SQL (개발용)
  * 운영 환경에서는 Supabase 대시보드에서 직접 생성하세요.
  */
@@ -400,6 +487,9 @@ module.exports = {
   getChatRoomById,
   linkAnalysisToRoom,
   updateChatRoom,
+  getChatRoomCount,
+  checkUserPremiumStatus,
+  checkChatRoomLimit,
   CREATE_MEDICAL_ANALYSIS_TABLE_SQL,
   CREATE_CHAT_ROOM_TABLE_SQL,
   isDevelopment
