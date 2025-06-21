@@ -101,8 +101,9 @@ async function createUserDev(userData) {
  */
 async function saveAnalysisResult(analysisData) {
   try {
-    // summary를 암호화
+    // summary와 result를 암호화
     const encryptedSummary = encryptText(analysisData.summary);
+    const encryptedResult = analysisData.result ? encryptText(analysisData.result) : null;
     
     const { data, error } = await supabase
       .from('medical_analysis')
@@ -111,6 +112,7 @@ async function saveAnalysisResult(analysisData) {
         room_id: analysisData.roomId || null,
         model: analysisData.model,
         summary: encryptedSummary, // 암호화된 summary 저장
+        result: encryptedResult, // 암호화된 result 저장
         document_type: analysisData.documentType || 'other',
         created_at: new Date().toISOString()
       }])
@@ -137,7 +139,7 @@ async function getAnalysisResultsByUser(userId, limit = 10, offset = 0) {
   try {
     const { data, error } = await supabase
       .from('medical_analysis')
-      .select('id, model, summary, document_type, created_at, room_id')
+      .select('id, model, summary, result, document_type, created_at, room_id')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
@@ -147,15 +149,183 @@ async function getAnalysisResultsByUser(userId, limit = 10, offset = 0) {
       throw error;
     }
     
-    // summary를 복호화하여 반환
+    // summary와 result를 복호화하여 반환
     const decryptedData = data.map(result => ({
       ...result,
-      summary: safeDecrypt(result.summary) // 안전한 복호화 (기존 데이터 호환)
+      summary: safeDecrypt(result.summary), // 안전한 복호화 (기존 데이터 호환)
+      result: result.result ? safeDecrypt(result.result) : null // result 복호화
     }));
     
     return decryptedData;
   } catch (error) {
     console.error('getAnalysisResultsByUser 오류:', error);
+    throw error;
+  }
+}
+
+/**
+ * 새로운 채팅방 생성
+ */
+async function createChatRoom(userId, medicalAnalysisId = null, title = 'New Chat') {
+  try {
+    const { data, error } = await supabase
+      .from('chat_room')
+      .insert([{
+        user_id: userId,
+        medical_analysis_id: medicalAnalysisId,
+        title: title,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }])
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('채팅방 생성 오류:', error);
+      throw error;
+    }
+    
+    console.log('✅ 채팅방 생성 성공:', data.id);
+    return data;
+  } catch (error) {
+    console.error('createChatRoom 오류:', error);
+    throw error;
+  }
+}
+
+/**
+ * 사용자별 채팅방 조회
+ */
+async function getChatRoomsByUser(userId, limit = 10, offset = 0) {
+  try {
+    const { data, error } = await supabase
+      .from('chat_room')
+      .select(`
+        id,
+        title,
+        created_at,
+        updated_at,
+        medical_analysis:medical_analysis_id (
+          id,
+          model,
+          summary,
+          document_type,
+          created_at
+        )
+      `)
+      .eq('user_id', userId)
+      .order('updated_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+    
+    if (error) {
+      console.error('사용자별 채팅방 조회 오류:', error);
+      throw error;
+    }
+    
+    return data;
+  } catch (error) {
+    console.error('getChatRoomsByUser 오류:', error);
+    throw error;
+  }
+}
+
+/**
+ * 특정 채팅방 조회
+ */
+async function getChatRoomById(roomId, userId) {
+  try {
+    const { data, error } = await supabase
+      .from('chat_room')
+      .select(`
+        id,
+        title,
+        created_at,
+        updated_at,
+        user_id,
+        medical_analysis:medical_analysis_id (
+          id,
+          model,
+          summary,
+          result,
+          document_type,
+          created_at
+        )
+      `)
+      .eq('id', roomId)
+      .eq('user_id', userId) // 사용자 권한 검증
+      .single();
+    
+    if (error) {
+      console.error('채팅방 조회 오류:', error);
+      throw error;
+    }
+    
+    // summary와 result 복호화
+    if (data?.medical_analysis?.summary) {
+      data.medical_analysis.summary = safeDecrypt(data.medical_analysis.summary);
+    }
+    if (data?.medical_analysis?.result) {
+      data.medical_analysis.result = safeDecrypt(data.medical_analysis.result);
+    }
+    
+    return data;
+  } catch (error) {
+    console.error('getChatRoomById 오류:', error);
+    throw error;
+  }
+}
+
+/**
+ * 채팅방에 의료 분석 연결
+ */
+async function linkAnalysisToRoom(roomId, analysisId) {
+  try {
+    const { data, error } = await supabase
+      .from('chat_room')
+      .update({
+        medical_analysis_id: analysisId,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', roomId)
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('채팅방에 분석 연결 오류:', error);
+      throw error;
+    }
+    
+    console.log('✅ 채팅방에 분석 연결 성공:', roomId, '->', analysisId);
+    return data;
+  } catch (error) {
+    console.error('linkAnalysisToRoom 오류:', error);
+    throw error;
+  }
+}
+
+/**
+ * 채팅방 업데이트 (제목 변경, 마지막 활동 시간 업데이트)
+ */
+async function updateChatRoom(roomId, updates) {
+  try {
+    const { data, error } = await supabase
+      .from('chat_room')
+      .update({
+        ...updates,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', roomId)
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('채팅방 업데이트 오류:', error);
+      throw error;
+    }
+    
+    return data;
+  } catch (error) {
+    console.error('updateChatRoom 오류:', error);
     throw error;
   }
 }
@@ -171,6 +341,7 @@ CREATE TABLE IF NOT EXISTS medical_analysis (
   room_id TEXT,
   model TEXT NOT NULL,
   summary TEXT NOT NULL,
+  result TEXT,
   document_type TEXT DEFAULT 'other',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -188,6 +359,35 @@ CREATE INDEX IF NOT EXISTS idx_medical_analysis_document_type ON medical_analysi
 --   FOR SELECT USING (auth.uid()::text = user_id);
 `;
 
+/**
+ * 채팅방 테이블 생성 SQL (개발용)
+ */
+const CREATE_CHAT_ROOM_TABLE_SQL = `
+-- UUID 확장 모듈 활성화
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+CREATE TABLE IF NOT EXISTS chat_room (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id TEXT NOT NULL,
+  medical_analysis_id BIGINT REFERENCES medical_analysis(id) ON DELETE CASCADE,
+  title TEXT NOT NULL DEFAULT '새로운 의료 분석',
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 인덱스 생성
+CREATE INDEX IF NOT EXISTS idx_chat_room_user_id ON chat_room(user_id);
+CREATE INDEX IF NOT EXISTS idx_chat_room_created_at ON chat_room(created_at);
+CREATE INDEX IF NOT EXISTS idx_chat_room_medical_analysis_id ON chat_room(medical_analysis_id);
+
+-- RLS 활성화 (필요한 경우)
+-- ALTER TABLE chat_room ENABLE ROW LEVEL SECURITY;
+
+-- 사용자는 자신의 채팅방만 볼 수 있는 정책 (필요한 경우)
+-- CREATE POLICY "Users can view own chat rooms" ON chat_room
+--   FOR ALL USING (auth.uid()::text = user_id);
+`;
+
 module.exports = {
   supabase,
   testConnection,
@@ -195,6 +395,12 @@ module.exports = {
   createUserDev,
   saveAnalysisResult,
   getAnalysisResultsByUser,
+  createChatRoom,
+  getChatRoomsByUser,
+  getChatRoomById,
+  linkAnalysisToRoom,
+  updateChatRoom,
   CREATE_MEDICAL_ANALYSIS_TABLE_SQL,
+  CREATE_CHAT_ROOM_TABLE_SQL,
   isDevelopment
 }; 

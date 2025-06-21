@@ -1,4 +1,4 @@
-const { supabase, CREATE_MEDICAL_ANALYSIS_TABLE_SQL } = require('../config/supabase-config');
+const { supabase, CREATE_MEDICAL_ANALYSIS_TABLE_SQL, CREATE_CHAT_ROOM_TABLE_SQL } = require('../config/supabase-config');
 const { encryptText, isEncrypted, testEncryption } = require('../utils/encryption-utils');
 
 /**
@@ -22,6 +22,30 @@ async function createMedicalAnalysisTable() {
     
   } catch (error) {
     console.error('테이블 생성 중 오류:', error.message);
+  }
+}
+
+/**
+ * 채팅방 테이블 생성
+ */
+async function createChatRoomTable() {
+  try {
+    const { data, error } = await supabase
+      .from('chat_room')
+      .select('count')
+      .limit(1);
+    
+    if (error && error.code === 'PGRST116') {
+      console.log('❌ chat_room 테이블이 아직 생성되지 않았습니다.');
+      console.log('위의 SQL을 실행한 후 다시 시도해주세요.');
+    } else if (error) {
+      console.log('⚠️  채팅방 테이블 확인 중 오류:', error.message);
+    } else {
+      console.log('✅ chat_room 테이블이 이미 존재합니다.');
+    }
+    
+  } catch (error) {
+    console.error('채팅방 테이블 생성 중 오류:', error.message);
   }
 }
 
@@ -93,6 +117,36 @@ async function addDocumentTypeColumn() {
     console.log('');
     console.log('ALTER TABLE medical_analysis ADD COLUMN IF NOT EXISTS document_type TEXT DEFAULT \'other\';');
     console.log('CREATE INDEX IF NOT EXISTS idx_medical_analysis_document_type ON medical_analysis(document_type);');
+    console.log('');
+    return false;
+  }
+}
+
+/**
+ * 기존 테이블에 result 컬럼 추가
+ */
+async function addResultColumn() {
+  try {
+    console.log('🔧 medical_analysis 테이블에 result 컬럼을 추가하고 있습니다...\n');
+    
+    // result 컬럼 추가
+    const { error: alterError } = await supabase.rpc('add_result_column', {});
+    
+    if (alterError && !alterError.message.includes('already exists')) {
+      console.log('⚠️  수동으로 다음 SQL을 실행해주세요:');
+      console.log('');
+      console.log('ALTER TABLE medical_analysis ADD COLUMN IF NOT EXISTS result TEXT;');
+      console.log('');
+      return false;
+    }
+    
+    console.log('✅ result 컬럼이 성공적으로 추가되었습니다.');
+    return true;
+    
+  } catch (error) {
+    console.log('⚠️  컬럼 추가 중 오류가 발생했습니다. 수동으로 다음 SQL을 실행해주세요:');
+    console.log('');
+    console.log('ALTER TABLE medical_analysis ADD COLUMN IF NOT EXISTS result TEXT;');
     console.log('');
     return false;
   }
@@ -186,10 +240,19 @@ if (require.main === module) {
     if (!isSetup) {
       console.log('\n3️⃣ 테이블 생성');
       await createMedicalAnalysisTable();
+      await createChatRoomTable();
     } else {
       console.log('\n3️⃣ 스키마 업데이트');
       // 기존 테이블이 있으면 document_type 컬럼 추가 시도
       await addDocumentTypeColumn();
+      
+      // result 컬럼 추가
+      console.log('\n🔧 result 컬럼 추가');
+      await addResultColumn();
+      
+      // 채팅방 테이블 생성 (새로운 테이블이므로 항상 시도)
+      console.log('\n📋 채팅방 테이블 생성');
+      await createChatRoomTable();
       
       console.log('\n4️⃣ 데이터 암호화 마이그레이션');
       // 기존 데이터 암호화 마이그레이션
@@ -197,9 +260,15 @@ if (require.main === module) {
     }
     
     console.log('✨ 모든 설정이 완료되었습니다.\n');
-    console.log('📋 추가 참고사항:');
+    console.log('📋 필수 테이블 SQL:');
+    console.log('🏥 의료 분석 테이블:');
+    console.log(CREATE_MEDICAL_ANALYSIS_TABLE_SQL);
+    console.log('\n💬 채팅방 테이블:');
+    console.log(CREATE_CHAT_ROOM_TABLE_SQL);
+    console.log('\n📋 추가 참고사항:');
     console.log('  - 의료 데이터는 AES256-GCM으로 암호화되어 저장됩니다');
     console.log('  - 문서 유형이 자동으로 분류되어 저장됩니다');
+    console.log('  - 각 분석마다 새로운 채팅방이 자동으로 생성됩니다');
     console.log('  - ENCRYPTION_KEY 환경변수를 안전하게 관리하세요\n');
   }
   
@@ -208,7 +277,9 @@ if (require.main === module) {
 
 module.exports = {
   createMedicalAnalysisTable,
+  createChatRoomTable,
   checkDatabaseSetup,
   addDocumentTypeColumn,
+  addResultColumn,
   encryptExistingData
 }; 
