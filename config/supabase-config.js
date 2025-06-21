@@ -253,11 +253,16 @@ async function getChatRoomById(roomId, userId) {
       `)
       .eq('id', roomId)
       .eq('user_id', userId) // 사용자 권한 검증
-      .single();
+      .maybeSingle(); // .single() 대신 .maybeSingle() 사용
     
     if (error) {
       console.error('채팅방 조회 오류:', error);
       throw error;
+    }
+    
+    // data가 null이면 채팅방이 없음
+    if (!data) {
+      return null;
     }
     
     // summary와 result 복호화
@@ -288,11 +293,15 @@ async function linkAnalysisToRoom(roomId, analysisId) {
       })
       .eq('id', roomId)
       .select()
-      .single();
+      .maybeSingle(); // .single() 대신 .maybeSingle() 사용
     
     if (error) {
       console.error('채팅방에 분석 연결 오류:', error);
       throw error;
+    }
+    
+    if (!data) {
+      throw new Error('채팅방을 찾을 수 없습니다.');
     }
     
     console.log('✅ 채팅방에 분석 연결 성공:', roomId, '->', analysisId);
@@ -316,11 +325,15 @@ async function updateChatRoom(roomId, updates) {
       })
       .eq('id', roomId)
       .select()
-      .single();
+      .maybeSingle(); // .single() 대신 .maybeSingle() 사용
     
     if (error) {
       console.error('채팅방 업데이트 오류:', error);
       throw error;
+    }
+    
+    if (!data) {
+      throw new Error('채팅방을 찾을 수 없습니다.');
     }
     
     return data;
@@ -437,11 +450,15 @@ async function saveChatHistory(userId, roomId, userMessage, aiResponse, model) {
         created_at: new Date().toISOString()
       }])
       .select()
-      .single();
+      .maybeSingle(); // .single() 대신 .maybeSingle() 사용
     
     if (error) {
       console.error('채팅 히스토리 저장 오류:', error);
       throw error;
+    }
+    
+    if (!data) {
+      throw new Error('채팅 히스토리 저장에 실패했습니다.');
     }
     
     console.log('✅ 채팅 히스토리 저장 성공 (암호화됨):', data.id);
@@ -468,6 +485,11 @@ async function getChatHistory(userId, roomId, limit = 50, offset = 0) {
     if (error) {
       console.error('채팅 히스토리 조회 오류:', error);
       throw error;
+    }
+    
+    // data가 null이거나 빈 배열이면 빈 배열 반환
+    if (!data || data.length === 0) {
+      return [];
     }
     
     // 메시지들을 복호화하여 반환
@@ -500,6 +522,11 @@ async function getRecentChatHistory(userId, roomId, limit = 10) {
     if (error) {
       console.error('최근 채팅 히스토리 조회 오류:', error);
       throw error;
+    }
+    
+    // data가 null이거나 빈 배열이면 빈 배열 반환
+    if (!data || data.length === 0) {
+      return [];
     }
     
     // 메시지들을 복호화하고 시간 순서대로 정렬
