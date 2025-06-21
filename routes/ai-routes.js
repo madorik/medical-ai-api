@@ -139,42 +139,28 @@ router.post('/medical/analyze', verifyToken, upload.single('medicalFile'), async
         message: '분석 결과가 성공적으로 저장되었습니다.'
       })}\n\n`);
 
-      // 채팅방 처리
-      if (savedAnalysis) {
-        if (roomId) {
-          // 기존 채팅방에 분석 연결
-          try {
-            await linkAnalysisToRoom(roomId, savedAnalysis.id);
-            res.write(`data: ${JSON.stringify({
-              type: 'info',
-              message: '분석 결과가 채팅방에 연결되었습니다.'
-            })}\n\n`);
-          } catch (linkError) {
-            console.error('채팅방 연결 중 오류:', linkError);
-            res.write(`data: ${JSON.stringify({
-              type: 'warning',
-              message: '분석은 완료되었으나 채팅방 연결 중 오류가 발생했습니다.'
-            })}\n\n`);
-          }
-        } else {
-          // 새로운 채팅방 생성
-          try {
-            const chatRoomTitle = `${result.documentTypeName} Analysis`;
-            createdChatRoom = await createChatRoom(userId, savedAnalysis.id, chatRoomTitle);
-
-            res.write(`data: ${JSON.stringify({
-              type: 'info',
-              message: '새로운 채팅방이 생성되었습니다.'
-            })}\n\n`);
-          } catch (chatRoomError) {
-            console.error('채팅방 생성 중 오류:', chatRoomError);
-            res.write(`data: ${JSON.stringify({
-              type: 'warning',
-              message: '분석은 완료되었으나 채팅방 생성 중 오류가 발생했습니다.'
-            })}\n\n`);
-          }
+      // 채팅방 처리 및 제목 업데이트
+      if (roomId) {
+        // 기존 채팅방에 분석 연결
+        try {
+          await linkAnalysisToRoom(roomId, savedAnalysis.id);
+          
+          // 채팅방 제목 업데이트
+          const chatRoomTitle = `${result.documentTypeName} 분석`;
+          await updateChatRoom(roomId, { title: chatRoomTitle });
+          
+          res.write(`data: ${JSON.stringify({
+            type: 'info',
+            message: '분석 결과가 채팅방에 연결되고 제목이 업데이트되었습니다.'
+          })}\n\n`);
+        } catch (linkError) {
+          console.error('채팅방 연결 중 오류:', linkError);
+          res.write(`data: ${JSON.stringify({
+            type: 'warning',
+            message: '분석은 완료되었으나 채팅방 연결 중 오류가 발생했습니다.'
+          })}\n\n`);
         }
-      }
+      } 
     } catch (saveError) {
       console.error('분석 결과 저장 중 오류:', saveError);
       res.write(`data: ${JSON.stringify({
