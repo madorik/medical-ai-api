@@ -36,11 +36,15 @@ app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
     ? [
         'https://medicare-ai-front.vercel.app',
+        'https://ttodoc.com',
+        'https://www.ttodoc.com',
         process.env.FRONTEND_URL,
       ].filter(Boolean) // undefined 값 제거
     : [
         'http://localhost:3000', 
         'https://medicare-ai-front.vercel.app',
+        'https://ttodoc.com',
+        'https://www.ttodoc.com',
         process.env.FRONTEND_URL
       ].filter(Boolean),
   credentials: true,
