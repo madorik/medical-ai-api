@@ -1,7 +1,7 @@
 const express = require('express');
 const OpenAI = require('openai');
 const { verifyToken } = require('../utils/auth-utils');
-const { supabase, getAnalysisResultsByUser, getChatRoomById } = require('../config/supabase-config');
+const { supabase, getAnalysisResultsByUser, getChatRoomById, saveChatHistory, getRecentChatHistory, getChatHistory } = require('../config/supabase-config');
 const { CATEGORY_NAMES_KR } = require('../utils/medical-document-categories');
 
 const router = express.Router();
@@ -191,8 +191,23 @@ router.post('/stream', verifyToken, async (req, res) => {
       systemPrompt += `\n\n⚠️ 응급 상황이 감지되었습니다. 이 경우 즉시 119에 신고하거나 가까운 응급실을 방문하도록 강력히 권유하고, 의료 조치가 우선임을 강조하세요.`;
     }
     
-    // 대화 히스토리 구성 (최근 10개만 사용)
-    const recentHistory = chatHistory.slice(-10);
+    // 대화 히스토리 구성
+    let recentHistory = [];
+    
+    if (roomId) {
+      // roomId가 있으면 데이터베이스에서 최근 채팅 히스토리 조회
+      try {
+        recentHistory = await getRecentChatHistory(userId, roomId, 10);
+      } catch (error) {
+        console.error('채팅 히스토리 조회 오류:', error);
+        // 오류 시 전달받은 chatHistory 사용
+        recentHistory = chatHistory.slice(-10);
+      }
+    } else {
+      // roomId가 없으면 전달받은 chatHistory 사용 (최근 10개만)
+      recentHistory = chatHistory.slice(-10);
+    }
+    
     const messages = [
       { role: 'system', content: systemPrompt },
       ...recentHistory.map(chat => ([
@@ -230,6 +245,16 @@ router.post('/stream', verifyToken, async (req, res) => {
             isEmergency,
             timestamp: new Date().toISOString()
           })}\n\n`);
+        }
+      }
+      
+      // 채팅 히스토리 저장 (roomId가 있을 때만)
+      if (roomId && fullResponse.trim()) {
+        try {
+          await saveChatHistory(userId, roomId, cleanMessage, fullResponse, modelName);
+        } catch (saveError) {
+          console.error('채팅 히스토리 저장 실패:', saveError);
+          // 저장 실패해도 사용자에게는 알리지 않음
         }
       }
       
@@ -276,5 +301,6 @@ router.post('/stream', verifyToken, async (req, res) => {
     res.end();
   }
 });
+
 
 module.exports = router; 

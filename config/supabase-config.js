@@ -418,6 +418,106 @@ async function checkChatRoomLimit(userId) {
 }
 
 /**
+ * 채팅 히스토리 저장
+ */
+async function saveChatHistory(userId, roomId, userMessage, aiResponse, model) {
+  try {
+    // 사용자 메시지와 AI 응답을 암호화
+    const encryptedUserMessage = encryptText(userMessage);
+    const encryptedAiResponse = encryptText(aiResponse);
+    
+    const { data, error } = await supabase
+      .from('chat_history')
+      .insert([{
+        user_id: userId,
+        room_id: roomId,
+        user_message: encryptedUserMessage,
+        ai_response: encryptedAiResponse,
+        model: model,
+        created_at: new Date().toISOString()
+      }])
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('채팅 히스토리 저장 오류:', error);
+      throw error;
+    }
+    
+    console.log('✅ 채팅 히스토리 저장 성공 (암호화됨):', data.id);
+    return data;
+  } catch (error) {
+    console.error('saveChatHistory 오류:', error);
+    throw error;
+  }
+}
+
+/**
+ * 채팅 히스토리 조회
+ */
+async function getChatHistory(userId, roomId, limit = 50, offset = 0) {
+  try {
+    const { data, error } = await supabase
+      .from('chat_history')
+      .select('id, user_message, ai_response, model, created_at')
+      .eq('user_id', userId)
+      .eq('room_id', roomId)
+      .order('created_at', { ascending: true })
+      .range(offset, offset + limit - 1);
+    
+    if (error) {
+      console.error('채팅 히스토리 조회 오류:', error);
+      throw error;
+    }
+    
+    // 메시지들을 복호화하여 반환
+    const decryptedData = data.map(chat => ({
+      ...chat,
+      user_message: safeDecrypt(chat.user_message),
+      ai_response: safeDecrypt(chat.ai_response)
+    }));
+    
+    return decryptedData;
+  } catch (error) {
+    console.error('getChatHistory 오류:', error);
+    throw error;
+  }
+}
+
+/**
+ * 최근 채팅 히스토리 조회 (대화 컨텍스트용)
+ */
+async function getRecentChatHistory(userId, roomId, limit = 10) {
+  try {
+    const { data, error } = await supabase
+      .from('chat_history')
+      .select('user_message, ai_response, model, created_at')
+      .eq('user_id', userId)
+      .eq('room_id', roomId)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+    
+    if (error) {
+      console.error('최근 채팅 히스토리 조회 오류:', error);
+      throw error;
+    }
+    
+    // 메시지들을 복호화하고 시간 순서대로 정렬
+    const decryptedData = data.map(chat => ({
+      userMessage: safeDecrypt(chat.user_message),
+      aiResponse: safeDecrypt(chat.ai_response),
+      model: chat.model,
+      created_at: chat.created_at
+    })).reverse(); // 시간순으로 정렬 (오래된 것부터)
+    
+    return decryptedData;
+  } catch (error) {
+    console.error('getRecentChatHistory 오류:', error);
+    throw error;
+  }
+}
+
+/**
  * 분석 결과 테이블 생성 SQL (개발용)
  * 운영 환경에서는 Supabase 대시보드에서 직접 생성하세요.
  */
@@ -475,6 +575,33 @@ CREATE INDEX IF NOT EXISTS idx_chat_room_medical_analysis_id ON chat_room(medica
 --   FOR ALL USING (auth.uid()::text = user_id);
 `;
 
+/**
+ * 채팅 히스토리 테이블 생성 SQL (개발용)
+ */
+const CREATE_CHAT_HISTORY_TABLE_SQL = `
+CREATE TABLE IF NOT EXISTS chat_history (
+  id BIGSERIAL PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  room_id UUID NOT NULL REFERENCES chat_room(id) ON DELETE CASCADE,
+  user_message TEXT NOT NULL,
+  ai_response TEXT NOT NULL,
+  model TEXT NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 인덱스 생성
+CREATE INDEX IF NOT EXISTS idx_chat_history_user_id ON chat_history(user_id);
+CREATE INDEX IF NOT EXISTS idx_chat_history_room_id ON chat_history(room_id);
+CREATE INDEX IF NOT EXISTS idx_chat_history_created_at ON chat_history(created_at);
+
+-- RLS 활성화 (필요한 경우)
+-- ALTER TABLE chat_history ENABLE ROW LEVEL SECURITY;
+
+-- 사용자는 자신의 채팅 히스토리만 볼 수 있는 정책 (필요한 경우)
+-- CREATE POLICY "Users can view own chat history" ON chat_history
+--   FOR ALL USING (auth.uid()::text = user_id);
+`;
+
 module.exports = {
   supabase,
   testConnection,
@@ -490,7 +617,11 @@ module.exports = {
   getChatRoomCount,
   checkUserPremiumStatus,
   checkChatRoomLimit,
+  saveChatHistory,
+  getChatHistory,
+  getRecentChatHistory,
   CREATE_MEDICAL_ANALYSIS_TABLE_SQL,
   CREATE_CHAT_ROOM_TABLE_SQL,
+  CREATE_CHAT_HISTORY_TABLE_SQL,
   isDevelopment
 }; 

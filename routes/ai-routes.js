@@ -1,7 +1,7 @@
 const express = require('express');
 const { upload, validateFile, formatUploadError } = require('../utils/file-upload-utils');
 const { analyzeUploadedMedicalDocumentWithSummary } = require('../services/medical-analysis-service');
-const { saveAnalysisResult, getAnalysisResultsByUser, createChatRoom, getChatRoomsByUser, getChatRoomById, linkAnalysisToRoom, updateChatRoom, checkChatRoomLimit } = require('../config/supabase-config');
+const { saveAnalysisResult, getAnalysisResultsByUser, createChatRoom, getChatRoomsByUser, getChatRoomById, linkAnalysisToRoom, updateChatRoom, checkChatRoomLimit, getChatHistory } = require('../config/supabase-config');
 const { verifyToken } = require('../utils/auth-utils');
 const { CATEGORY_NAMES_KR } = require('../utils/medical-document-categories');
 
@@ -458,6 +458,9 @@ router.get('/medical/chat-rooms/:roomId', verifyToken, async (req, res) => {
       });
     }
 
+    // 채팅 히스토리 조회
+    const chatHistory = await getChatHistory(userId, roomId, 50, 0);
+
     // 결과 포맷팅
     const formattedChatRoom = {
       id: chatRoom.id,
@@ -472,7 +475,8 @@ router.get('/medical/chat-rooms/:roomId', verifyToken, async (req, res) => {
         document_type: chatRoom.medical_analysis.document_type || 'other',
         document_type_name: CATEGORY_NAMES_KR[chatRoom.medical_analysis.document_type] || '기타',
         created_at: chatRoom.medical_analysis.created_at
-      } : null
+      } : null,
+      chatHistory: chatHistory
     };
 
     res.json({
